@@ -7,5 +7,6 @@ class SaylApp : Application() {
         super.onCreate()
         // إن أُغلق التطبيق أثناء التنزيل يكمل العامل ما بقي في الطابور
         if (Bus.store(this).all().any { it.active }) DownloadWorker.kick(this)
+        EngineUpdateWorker.schedule(this)
     }
 }

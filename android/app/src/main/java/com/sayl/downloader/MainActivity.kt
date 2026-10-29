@@ -12,6 +12,7 @@ import com.getcapacitor.BridgeActivity
 class MainActivity : BridgeActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         registerPlugin(SaylPlugin::class.java)
+        registerPlugin(UpdaterPlugin::class.java)
         super.onCreate(savedInstanceState)
         DownloadWorker.ensureChannels(this)
         askPermissions()
