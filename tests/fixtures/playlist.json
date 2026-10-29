@@ -1,0 +1,4 @@
+{"_type":"playlist","id":"PL123","title":"قائمتي","entries":[
+ {"_type":"url","id":"a1","title":"الأول","url":"https://www.youtube.com/watch?v=a1","duration":60},
+ {"_type":"url","id":"a2","title":"[Private video]","url":"https://www.youtube.com/watch?v=a2","duration":null},
+ {"_type":"url","id":"a3","title":null,"url":"https://www.youtube.com/watch?v=a3","duration":null}]}
