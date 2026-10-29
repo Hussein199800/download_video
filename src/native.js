@@ -3,6 +3,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 
 const native = Capacitor.isNativePlatform();
 const Plugin = native ? registerPlugin('Sayl') : null;
+const UpdaterPlugin = native ? registerPlugin('Updater') : null;
 
 export const isNative = native;
 
@@ -97,4 +98,19 @@ export const Sayl = {
   takeSharedText: async () => (await P.takeSharedText()).text,
   onProgress: (cb) => { P.addListener('progress', cb); P.addListener('state', cb); },
   onShared: (cb) => P.addListener('shared', (e) => cb(e.text)),
+};
+
+// تحديث التطبيق نفسه: التنزيل والتحقق من الحزمة والتوقيع ثم التثبيت (Updater.kt)
+const mockUpdater = {
+  download: () => Promise.resolve({ ok: true }),
+  install: () => Promise.resolve({ status: 'started' }),
+  status: () => Promise.resolve({ ready: false }),
+  addListener: () => Promise.resolve({ remove() {} }),
+};
+const U = UpdaterPlugin || mockUpdater;
+export const AppUpdater = {
+  download: (url) => U.download({ url }),
+  install: () => U.install(),
+  status: async () => (await U.status()).ready,
+  onProgress: (cb) => U.addListener('progress', cb),
 };
