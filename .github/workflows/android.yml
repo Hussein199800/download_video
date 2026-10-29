@@ -1,0 +1,80 @@
+name: بناء تطبيق أندرويد
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    # لنشر الإصدار في صفحة الإصدارات ليصل التحديث للمستخدمين من داخل التطبيق
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      # Android SDK مثبّت مسبقاً على أجهزة GitHub، وGradle ينزّل ما ينقصه تلقائياً
+      - name: Check Android SDK
+        run: test -d "$ANDROID_HOME" && echo "ANDROID_HOME=$ANDROID_HOME"
+      - run: npm ci
+      - name: JavaScript unit tests
+        run: npm test
+      - run: npm run build && npx cap sync android
+      - name: Kotlin unit tests
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew testReleaseUnitTest --no-daemon
+
+      # نسخة موقّعة للنشر: تعمل فقط إذا أُضيف مفتاح التوقيع في أسرار المستودع
+      - name: Prepare signing key
+        id: sign
+        env:
+          KEYSTORE_B64: ${{ secrets.SAYL_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sayl.jks"
+            echo "path=$RUNNER_TEMP/sayl.jks" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build signed release APK
+        if: steps.sign.outputs.path != ''
+        working-directory: android
+        env:
+          SAYL_KEYSTORE: ${{ steps.sign.outputs.path }}
+          SAYL_KEYSTORE_PASSWORD: ${{ secrets.SAYL_KEYSTORE_PASSWORD }}
+          SAYL_KEY_ALIAS: sayl
+        run: |
+          chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+          VER=$(node -p "require('../package.json').version")
+          for abi in arm64-v8a armeabi-v7a; do mv app/build/outputs/apk/release/app-$abi-release.apk ../sayl-$VER-$abi.apk; done
+
+      - name: Build debug APK (no signing key)
+        if: steps.sign.outputs.path == ''
+        working-directory: android
+        run: |
+          chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+          for abi in arm64-v8a armeabi-v7a; do mv app/build/outputs/apk/debug/app-$abi-debug.apk ../sayl-debug-$abi.apk; done
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: sayl-apk
+          path: sayl*.apk
+
+      # عند الدمج في main: نشر الإصدار الموقّع مرة واحدة لكل رقم إصدار، فيظهر في «التحقق من التحديثات»
+      - name: Publish release
+        if: steps.sign.outputs.path != '' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          if gh release view "v$VER" >/dev/null 2>&1; then
+            echo "الإصدار v$VER منشور مسبقاً"
+          else
+            gh release create "v$VER" sayl-$VER-*.apk --title "سَيْل $VER" --notes-file release-notes.md --target "$GITHUB_SHA"
+          fi

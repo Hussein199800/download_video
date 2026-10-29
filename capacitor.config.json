@@ -1,0 +1,6 @@
+{
+  "appId": "com.sayl.downloader",
+  "appName": "سَيْل",
+  "webDir": "www",
+  "android": { "backgroundColor": "#070d1d" }
+}
