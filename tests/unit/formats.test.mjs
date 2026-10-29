@@ -29,6 +29,12 @@ test('صوت MP3 وM4A', () => {
   assert.ok(!m4a.includes('--audio-quality'));
 });
 
+test('الصورة المصغرة تُدمج في MP3 فقط، والفيديو يفضّل H.264', () => {
+  assert.ok(buildArgs({ type: 'audio', format: 'mp3', kbps: 192 }, S).includes('--embed-thumbnail'));
+  assert.ok(!buildArgs({ type: 'audio', format: 'm4a' }, S).includes('--embed-thumbnail'));
+  assert.equal(pair(buildArgs({ type: 'video', height: 720 }, S), '-S'), 'res,vcodec:h264,acodec:m4a');
+});
+
 test('aria2c للتسريع', () => {
   assert.equal(pair(buildArgs({ type: 'video', height: 'best' }, { aria2: true, retries: 3 }), '--downloader'), 'libaria2c.so');
   assert.ok(!buildArgs({ type: 'video', height: 'best' }, S).includes('--downloader'));

@@ -8,12 +8,13 @@ export const HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
 export function buildArgs(choice, settings = {}) {
   const a = ['--no-playlist', '--windows-filenames', '--no-mtime', '--retries', String(settings.retries ?? 3)];
   if (choice.type === 'audio') {
-    if (choice.format === 'm4a') a.push('-f', 'ba[ext=m4a]/ba', '-x', '--audio-format', 'm4a');
-    else a.push('-f', 'ba/b', '-x', '--audio-format', 'mp3', '--audio-quality', `${choice.kbps || 192}K`);
-    a.push('--embed-thumbnail', '--embed-metadata');
+    // دمج الصورة في M4A يحتاج مكتبة غير مضمّنة، فيقتصر على MP3
+    if (choice.format === 'm4a') a.push('-f', 'ba[ext=m4a]/ba', '-x', '--audio-format', 'm4a', '--embed-metadata');
+    else a.push('-f', 'ba/b', '-x', '--audio-format', 'mp3', '--audio-quality', `${choice.kbps || 192}K`, '--embed-thumbnail', '--embed-metadata');
   } else {
     const h = Number(choice.height);
-    a.push('-f', h > 0 ? `bv*[height<=${h}]+ba/b[height<=${h}]/b` : 'bv*+ba/b', '--merge-output-format', 'mp4', '--embed-metadata');
+    // عند تساوي الدقة يُفضَّل H.264 وصوت M4A لأنهما يعملان على كل الأجهزة
+    a.push('-f', h > 0 ? `bv*[height<=${h}]+ba/b[height<=${h}]/b` : 'bv*+ba/b', '-S', 'res,vcodec:h264,acodec:m4a', '--merge-output-format', 'mp4', '--embed-metadata');
   }
   if (settings.aria2) a.push('--downloader', 'libaria2c.so');
   return a;

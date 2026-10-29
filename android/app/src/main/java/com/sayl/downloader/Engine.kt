@@ -50,15 +50,20 @@ object Engine {
         outDir.mkdirs()
         val r = YoutubeDLRequest(url)
         r.addCommands(args)
-        r.addOption("-o", File(outDir, OUTPUT_TEMPLATE).absolutePath)
-        r.addOption("--print", "after_move:filepath")
-        r.addOption("--newline")
+        r.addCommands(outputArgs(outDir))
         withCookies(r, cookies)
         val res = YoutubeDL.getInstance().execute(r, id) { p, eta, line -> onProgress(p, eta, line) }
         val path = res.out.lines().map { it.trim() }.lastOrNull { it.startsWith("/") }
             ?: throw IllegalStateException("لم يُعرف مكان الملف المنزّل")
         return File(path)
     }
+
+    /** مكان الحفظ وطباعة المسار النهائي؛ --print يُسكت yt-dlp فنعيد إظهار التقدم بـ --progress */
+    fun outputArgs(outDir: File): List<String> = listOf(
+        "-o", File(outDir, OUTPUT_TEMPLATE).absolutePath,
+        "--print", "after_move:filepath",
+        "--progress", "--newline",
+    )
 
     fun cancel(id: String) {
         YoutubeDL.getInstance().destroyProcessById(id)
