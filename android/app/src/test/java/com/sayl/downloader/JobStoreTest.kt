@@ -29,7 +29,8 @@ class JobStoreTest {
         s.update("a") { it.copy(state = "running", pct = 40f) }
         s.recoverInterrupted()
         assertEquals("queued", s.get("a")!!.state)
-        assertEquals(0f, s.get("a")!!.pct)
+        // التقدم يبقى لأن التنزيل يكمل الملف الجزئي
+        assertEquals(40f, s.get("a")!!.pct)
     }
 
     @Test
@@ -72,5 +73,39 @@ class JobStoreTest {
         assertEquals("running", s.get("a")!!.state)
         assertEquals("b", s.claim()!!.id)
         assertNull(s.claim())
+    }
+
+    @Test
+    fun pausedIsNotClaimedAndResumeRequeues() {
+        val s = JobStore(tmp())
+        s.add(listOf(job("a", at = 1), job("b", at = 2)))
+        s.pause("a")
+        assertEquals("paused", s.get("a")!!.state)
+        assertEquals("b", s.claim()!!.id)
+        assertNull(s.claim())
+        s.resume("a")
+        assertEquals("queued", s.get("a")!!.state)
+        assertEquals("a", s.claim()!!.id)
+    }
+
+    @Test
+    fun pausedCountsAsDuplicate() {
+        val s = JobStore(tmp())
+        s.add(listOf(job("a")))
+        s.pause("a")
+        assertEquals(0, s.add(listOf(job("b", url = "https://youtu.be/a"))).size)
+    }
+
+    @Test
+    fun reorderChangesClaimOrder() {
+        val s = JobStore(tmp())
+        s.add(listOf(job("a", at = 1), job("b", at = 2), job("c", at = 3)))
+        s.toTop("c")
+        assertEquals(listOf("c", "a", "b"), s.queueOrder())
+        s.move("a", 1)
+        assertEquals(listOf("c", "b", "a"), s.queueOrder())
+        s.move("c", -1) // الأول لا يصعد أكثر
+        assertEquals(listOf("c", "b", "a"), s.queueOrder())
+        assertEquals("c", s.claim()!!.id)
     }
 }

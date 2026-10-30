@@ -27,10 +27,21 @@ function mockInfo(url) {
     thumbnail: '', webpage_url: url, formats: [{ height: 1080, vcodec: 'avc1' }, { height: 720, vcodec: 'avc1' }, { height: 360, vcodec: 'avc1' }] }) });
 }
 
+function mockReorder(id, target) {
+  const ids = [...mockJobs.values()].filter((j) => ['queued', 'waiting_network', 'retrying'].includes(j.state)).sort((a, b) => a.order - b.order).map((j) => j.id);
+  const i = ids.indexOf(id);
+  if (i < 0) return;
+  ids.splice(target(ids, i), 0, ids.splice(i, 1)[0]);
+  ids.forEach((x, n) => { mockJobs.get(x).order = n; });
+  ids.forEach((x) => fire('state', { ...mockJobs.get(x) }));
+}
+
 function mockRun(j) {
   const t = setInterval(() => {
     const cur = mockJobs.get(j.id);
     if (!cur || cur.state !== 'running' && cur.state !== 'queued') return clearInterval(t);
+    // المجدول والمنتظر للشبكة لا يبدأ في المحرك الوهمي
+    if (cur.scheduledAt > Date.now() || cur.hold) return;
     cur.state = 'running';
     cur.pct = Math.min(100, cur.pct + (cur.slow ? 2 : 25));
     cur.total = 52428800; cur.downloaded = Math.round(cur.total * cur.pct / 100);
@@ -50,7 +61,7 @@ const mock = {
     for (const j of jobs) {
       const dup = [...mockJobs.values()].some((x) => (x.state === 'queued' || x.state === 'running') && x.url === j.url && JSON.stringify(x.args) === JSON.stringify(j.args));
       if (dup) continue;
-      const job = { ...j, slow: /slow/.test(j.url), state: 'queued', pct: 0, speed: 0, eta: -1, error: null, path: null, uri: null, attempts: 0, createdAt: Date.now(), finishedAt: 0 };
+      const job = { ...j, slow: /slow/.test(j.url), hold: /hold/.test(j.url), order: Date.now() + added, state: 'queued', pct: 0, speed: 0, eta: -1, error: null, path: null, uri: null, attempts: 0, createdAt: Date.now(), finishedAt: 0 };
       mockJobs.set(j.id, job); added++;
       mockRun(job);
     }
@@ -58,6 +69,10 @@ const mock = {
   },
   list: () => Promise.resolve({ jobs: [...mockJobs.values()].map((j) => ({ ...j })) }),
   cancel: ({ id }) => { const j = mockJobs.get(id); if (j) { j.state = 'canceled'; fire('state', { ...j }); } return Promise.resolve(); },
+  pause: ({ id }) => { const j = mockJobs.get(id); if (j && ['queued', 'running'].includes(j.state)) { j.state = 'paused'; j.speed = 0; fire('state', { ...j }); } return Promise.resolve(); },
+  resume: ({ id }) => { const j = mockJobs.get(id); if (j && j.state === 'paused') { j.state = 'queued'; fire('state', { ...j }); mockRun(j); } return Promise.resolve(); },
+  move: ({ id, delta }) => { mockReorder(id, (ids, i) => Math.max(0, Math.min(ids.length - 1, i + delta))); return Promise.resolve(); },
+  toTop: ({ id }) => { mockReorder(id, () => 0); return Promise.resolve(); },
   retry: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }); mockRun(j); } return Promise.resolve(); },
   remove: ({ id }) => { mockJobs.delete(id); return Promise.resolve(); },
   clearFinished: () => { for (const [k, j] of mockJobs) if (j.state === 'failed' || j.state === 'canceled') mockJobs.delete(k); return Promise.resolve(); },
@@ -84,6 +99,10 @@ export const Sayl = {
   enqueue: (jobs) => P.enqueue({ jobs }),
   list: async () => (await P.list()).jobs,
   cancel: (id) => P.cancel({ id }),
+  pause: (id) => P.pause({ id }),
+  resume: (id) => P.resume({ id }),
+  move: (id, delta) => P.move({ id, delta }),
+  toTop: (id) => P.toTop({ id }),
   retry: (id) => P.retry({ id }),
   remove: (id, deleteFile = false) => P.remove({ id, deleteFile }),
   clearFinished: () => P.clearFinished(),

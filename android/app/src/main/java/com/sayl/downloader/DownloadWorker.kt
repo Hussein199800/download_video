@@ -39,7 +39,7 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
 
     private fun run(job: Job) {
         Bus.emit("state", job)
-        val work = File(applicationContext.getExternalFilesDir(null) ?: applicationContext.filesDir, "work/${job.id}")
+        val work = workDir(applicationContext, job.id)
         try {
             val cookies = Bus.cookies(applicationContext).takeIf { it.exists() }
             val file = Engine.download(applicationContext, job.id, job.url, job.args, work, cookies) { pct, eta, line ->
@@ -58,9 +58,12 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
             val saved = Saver.publish(applicationContext, file, job.folder)
             finish(store.update(job.id) { it.copy(state = "done", pct = 100f, path = saved.path, uri = saved.uri, error = null, finishedAt = System.currentTimeMillis()) })
         } catch (e: YoutubeDL.CanceledException) {
-            finish(store.update(job.id) { it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) })
+            // الإيقاف المؤقت يقتل العملية أيضاً؛ نُبقي حالته وملفه الجزئي
+            if (store.get(job.id)?.state != "paused") finish(store.update(job.id) { it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) })
+            else Bus.emit("state", store.get(job.id)!!)
         } catch (e: Exception) {
-            if (store.get(job.id)?.state == "canceled") return
+            val st = store.get(job.id)?.state
+            if (st == "canceled" || st == "paused") return
             val msg = (e.message ?: e.toString()).take(4000)
             val retry = NETWORK.containsMatchIn(msg) && job.attempts < 2
             if (retry) {
@@ -70,7 +73,9 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
                 finish(store.update(job.id) { it.copy(state = "failed", error = msg, finishedAt = System.currentTimeMillis()) })
             }
         } finally {
-            work.deleteRecursively()
+            // الملف الجزئي يبقى للاستكمال ما دامت المهمة موقوفة أو ستُعاد
+            val st = store.get(job.id)?.state
+            if (st == null || st == "done" || st == "canceled" || st == "failed") work.deleteRecursively()
         }
     }
 
@@ -106,6 +111,12 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openApp())
+            .apply {
+                if (j != null) {
+                    addAction(0, "إيقاف مؤقت", ActionReceiver.intent(applicationContext, ActionReceiver.PAUSE, j.id))
+                    addAction(0, "إلغاء", ActionReceiver.intent(applicationContext, ActionReceiver.CANCEL, j.id))
+                }
+            }
             .build()
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ForegroundInfo(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         else ForegroundInfo(NOTIF_ID, n)
@@ -121,6 +132,9 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
         const val CH_PROGRESS = "downloads"
         const val CH_DONE = "done"
         private val NETWORK = Regex("timed out|network is unreachable|connection (reset|refused|aborted)|temporary failure in name resolution|unable to download webpage", RegexOption.IGNORE_CASE)
+
+        /** مجلد العمل للمهمة؛ يبقى بين المحاولات ليكمل التنزيل الملف الجزئي */
+        fun workDir(ctx: Context, id: String) = File(ctx.getExternalFilesDir(null) ?: ctx.filesDir, "work/$id")
 
         fun ensureChannels(ctx: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

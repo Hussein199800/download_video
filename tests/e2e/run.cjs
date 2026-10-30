@@ -102,6 +102,37 @@ async function main() {
     check('لا أخطاء في الصفحة (رابط واحد)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
 
+    // ---------- مدير التنزيلات: إيقاف واستكمال وترتيب ----------
+    page = await newPage(browser, base);
+    const add = async (u) => { await page.click('.tabbar [data-tab="home"]'); await page.fill('#url', u); await page.click('#go'); await page.waitForSelector('#dl'); await page.click('#dl'); await page.waitForTimeout(80); };
+    await add('https://youtu.be/slow-pause');
+    for (const n of [1, 2, 3]) await add(`https://youtu.be/hold${n}`);
+    await page.click('.tabbar [data-tab="jobs"]');
+    await page.waitForTimeout(400);
+    const slowCard = page.locator('.job', { hasText: 'slow-pause' }).first();
+    const titles = async () => page.locator('.job .job-t small').allInnerTexts();
+    await page.locator('.job').first().locator('[data-act="إيقاف"]').click();
+    await page.waitForTimeout(300);
+    check('الإيقاف المؤقت يظهر «موقوف»', /موقوف/.test(await page.locator('.job .tag', { hasText: 'موقوف' }).first().innerText().catch(() => '')));
+    const before = (await titles()).filter((t) => /hold/.test(t));
+    await page.locator('.job', { hasText: 'hold3' }).locator('[data-act="إلى رأس الطابور"]').click();
+    await page.waitForTimeout(300);
+    const after = (await titles()).filter((t) => /hold/.test(t));
+    check('«إلى رأس الطابور» يقدّم المهمة', before[2]?.includes('hold3') && after[0]?.includes('hold3'), `${before} → ${after}`);
+    await page.locator('.job', { hasText: 'hold1' }).locator('[data-act="للأسفل"]').click();
+    await page.waitForTimeout(300);
+    const after2 = (await titles()).filter((t) => /hold/.test(t));
+    check('«للأسفل» يؤخر المهمة', after2.join('|').indexOf('hold1') > after2.join('|').indexOf('hold2'), String(after2));
+    await page.locator('.job', { hasText: 'موقوف' }).first().locator('[data-act="استكمال"]').click();
+    await page.waitForTimeout(400);
+    check('الاستكمال يعيد التنزيل', !(await text(page)).includes('موقوف'));
+    await page.locator('.job .job-t').first().click();
+    check('صفحة التفاصيل تعرض السيرفر والحجم', /سيرفر 1/.test(await page.locator('.sheet').innerText()) && /الحجم/.test(await page.locator('.sheet').innerText()));
+    await shot(page, { path: path.join(OUT, 'details.png') });
+    await page.keyboard.press('Escape');
+    check('لا أخطاء في الصفحة (المدير)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+
     // ---------- قائمة تشغيل ----------
     page = await newPage(browser, base, { scheme: 'light' });
     await page.fill('#url', 'https://www.youtube.com/playlist?list=PL1');

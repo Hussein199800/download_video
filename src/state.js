@@ -25,7 +25,10 @@ export function startSync() {
 }
 
 export const allJobs = () => [...jobs.values()].sort((a, b) => b.createdAt - a.createdAt);
-export const activeJobs = () => allJobs().filter((j) => j.state !== 'done').sort((a, b) => a.createdAt - b.createdAt);
+// ترتيب شاشة التنزيلات: الجاري، ثم المنتظر بترتيب الطابور، ثم الموقوف، ثم الفاشل والملغى
+const RANK = { running: 0, queued: 1, retrying: 1, waiting_network: 1, paused: 2, failed: 3, canceled: 3 };
+export const activeJobs = () => allJobs().filter((j) => j.state !== 'done')
+  .sort((a, b) => (RANK[a.state] ?? 4) - (RANK[b.state] ?? 4) || (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
 export const doneJobs = () => allJobs().filter((j) => j.state === 'done').sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
 export const forget = (id) => { jobs.delete(id); notify(); };
 

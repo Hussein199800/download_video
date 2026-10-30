@@ -3,27 +3,40 @@ import { h, ic, toast, fmtBytes, progressLine } from '../ui.js';
 import { Sayl } from '../native.js';
 import { classifyError } from '../errors.js';
 import { activeJobs, onJobs, refreshJobs, forget } from '../state.js';
+import { showDetails } from './details.js';
 
-const STATE = { queued: ['في الانتظار', ''], running: ['يُنزَّل', 'run'], failed: ['تعذّر', 'bad'], canceled: ['أُلغي', 'warn'] };
+const STATE = {
+  queued: ['في الانتظار', ''], running: ['يُنزَّل', 'run'], paused: ['موقوف', 'warn'], waiting_network: ['بانتظار الشبكة', 'warn'],
+  retrying: ['سيُعاد', 'warn'], failed: ['تعذّر', 'bad'], canceled: ['أُلغي', 'warn'],
+};
 
 function jobCard(j) {
   const [label, cls] = STATE[j.state] || [j.state, ''];
   const color = j.kind === 'audio' ? 'c-violet' : 'c-sky';
-  const act = (icon, text, fn, extra = '') => h('button', { class: `btn sm ${extra || 'ghost'}`, onclick: async () => { try { await fn(); await refreshJobs(); } catch (e) { toast(e.message, 'bad'); } } }, ic(icon), text);
+  const act = (icon, text, fn, extra = '', label) => h('button', { class: `btn sm ${extra || 'ghost'}`, 'aria-label': label || text, 'data-act': label || text,
+    onclick: async () => { try { await fn(); await refreshJobs(); } catch (e) { toast(e.message, 'bad'); } } }, ic(icon), text);
+  const pending = ['queued', 'waiting_network', 'retrying'].includes(j.state);
   const running = j.state === 'running' && j.pct > 0;
   const meta = j.state === 'running'
     ? [progressLine(j), running ? `${Math.floor(j.pct)}%` : '']
-    : j.state === 'queued' ? ['ينتظر دوره'] : [];
+    : j.state === 'queued' ? ['ينتظر دوره']
+      : j.state === 'paused' ? [j.downloaded ? `${progressLine(j)} · موقوف` : 'موقوف قبل البدء'] : [];
   const err = j.state === 'failed' && classifyError(j.error);
   return h('div', { class: `job ${color}`, 'data-id': j.id },
     h('div', { class: 'job-h' }, ic(j.kind === 'audio' ? 'audio' : 'video', 'job-ic'),
-      h('div', { class: 'job-t' }, h('b', {}, j.title || j.url), h('small', {}, j.folder ? `📁 ${j.folder}` : j.url)),
+      h('button', { class: 'job-t', onclick: () => showDetails(j) }, h('b', {}, j.title || j.url), h('small', {}, [j.engine === 2 ? 'سيرفر 2' : '', j.folder ? `📁 ${j.folder}` : j.url].filter(Boolean).join(' · '))),
       h('span', { class: `tag ${cls}` }, label)),
-    (j.state === 'running' || j.state === 'queued') && h('div', { class: `bar${running ? '' : ' wait'}` }, h('i', { style: `width:${running ? j.pct : 30}%` })),
+    (j.state === 'running' || pending) && h('div', { class: `bar${running ? '' : ' wait'}` }, h('i', { style: `width:${running ? j.pct : 30}%` })),
+    j.state === 'paused' && j.pct > 0 && h('div', { class: 'bar paused' }, h('i', { style: `width:${j.pct}%` })),
     meta.length ? h('div', { class: 'job-meta' }, meta.filter(Boolean).map((m) => h('span', {}, m))) : null,
     err && h('div', { class: 'job-err' }, h('b', {}, err.title), h('small', {}, err.fix)),
     h('div', { class: 'job-acts' },
-      (j.state === 'running' || j.state === 'queued') && act('x', 'إلغاء', () => Sayl.cancel(j.id), 'danger'),
+      (j.state === 'running' || pending) && act('pause', 'إيقاف', () => Sayl.pause(j.id)),
+      j.state === 'paused' && act('play', 'استكمال', () => Sayl.resume(j.id), 'primary'),
+      pending && act('top', '', () => Sayl.toTop(j.id), '', 'إلى رأس الطابور'),
+      pending && act('up', '', () => Sayl.move(j.id, -1), '', 'للأعلى'),
+      pending && act('down', '', () => Sayl.move(j.id, 1), '', 'للأسفل'),
+      (j.state === 'running' || pending || j.state === 'paused') && act('x', 'إلغاء', () => Sayl.cancel(j.id), 'danger'),
       (j.state === 'failed' || j.state === 'canceled') && act('retry', 'إعادة المحاولة', () => Sayl.retry(j.id), 'primary'),
       (j.state === 'failed' || j.state === 'canceled') && act('trash', 'حذف', async () => { await Sayl.remove(j.id); forget(j.id); })),
   );
@@ -36,7 +49,7 @@ export function jobsView({ page, go }) {
     const list = activeJobs();
     const finished = list.filter((j) => j.state === 'failed' || j.state === 'canceled').length;
     const running = list.filter((j) => j.state === 'running');
-    const waiting = list.length - running.length - finished;
+    const waiting = list.filter((j) => ['queued', 'waiting_network', 'retrying'].includes(j.state)).length;
     const speed = running.reduce((n, j) => n + (j.speed || 0), 0);
     head.replaceChildren(
       list.length ? h('div', { class: 'stats' },

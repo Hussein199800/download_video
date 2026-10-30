@@ -71,19 +71,39 @@ class SaylPlugin : Plugin() {
         call.resolve(JSObject().put("jobs", out))
     }
 
-    @PluginMethod
-    fun cancel(call: PluginCall) {
+    private fun act(call: PluginCall, action: String) {
         val id = call.getString("id") ?: return call.reject("id مطلوب")
-        val j = store.update(id) { if (it.active) it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) else it }
-        Engine.cancel(id)
-        j?.let { Bus.emit("state", it) }
+        Actions.apply(context, action, id)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun cancel(call: PluginCall) = act(call, ActionReceiver.CANCEL)
+
+    @PluginMethod
+    fun pause(call: PluginCall) = act(call, ActionReceiver.PAUSE)
+
+    @PluginMethod
+    fun resume(call: PluginCall) = act(call, ActionReceiver.RESUME)
+
+    @PluginMethod
+    fun move(call: PluginCall) {
+        val id = call.getString("id") ?: return call.reject("id مطلوب")
+        store.move(id, call.getInt("delta", 0) ?: 0)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun toTop(call: PluginCall) {
+        val id = call.getString("id") ?: return call.reject("id مطلوب")
+        store.toTop(id)
         call.resolve()
     }
 
     @PluginMethod
     fun retry(call: PluginCall) {
         val id = call.getString("id") ?: return call.reject("id مطلوب")
-        val j = store.update(id) { if (!it.active) it.copy(state = "queued", pct = 0f, attempts = 0, error = null, createdAt = System.currentTimeMillis()) else it }
+        val j = store.update(id) { if (!it.active) it.copy(state = "queued", attempts = 0, error = null, retryAt = 0, pct = 0f, downloaded = 0) else it }
         j?.let { Bus.emit("state", it) }
         DownloadWorker.kick(context)
         call.resolve()
@@ -96,6 +116,7 @@ class SaylPlugin : Plugin() {
         if (j.active) Engine.cancel(id)
         if (call.getBoolean("deleteFile", false) == true) Saver.delete(context, j.uri)
         store.remove(id)
+        DownloadWorker.workDir(context, id).deleteRecursively()
         call.resolve()
     }
 
