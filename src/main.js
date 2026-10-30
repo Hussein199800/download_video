@@ -8,7 +8,7 @@ import { homeView, handleSharedText } from './views/home.js';
 import { jobsView } from './views/jobs.js';
 import { historyView } from './views/history.js';
 import { guideView } from './views/guide.js';
-import { moreView, autoChecks } from './views/more.js';
+import { moreView, autoChecks, syncNative } from './views/more.js';
 
 // [المعرّف، الاسم، الأيقونة، لون التبويب]
 const TABS = [
@@ -84,7 +84,7 @@ async function boot() {
   await startSync().catch(() => {});
   onJobs(badge);
   badge();
-  Sayl.setConfig({ parallel: getSettings().parallel }).catch(() => {});
+  syncNative();
   // المشاركة من تطبيق آخر: عند الفتح وأثناء العمل
   Sayl.takeSharedText().then((t) => t && handleSharedText(t, { go, open })).catch(() => {});
   Sayl.onShared((t) => handleSharedText(t, { go, open }));

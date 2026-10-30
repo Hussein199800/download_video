@@ -7,6 +7,7 @@ import { Sayl, isNative } from '../native.js';
 import { getSettings } from '../store.js';
 import { doneJobs, activeJobs, refreshJobs, logError } from '../state.js';
 import { choicePicker, uid } from './choice.js';
+import { whenPicker } from './when.js';
 import { openPlaylist } from './playlist.js';
 import { engineUpdateFlow, cookiesFlow } from './more.js';
 
@@ -24,6 +25,7 @@ export async function enqueueJobs(jobs) {
     const r = await Sayl.enqueue(jobs);
     await refreshJobs();
     if (!r.added) toast('موجود في الطابور', 'bad');
+    else if (jobs[0]?.scheduledAt > 0) toast(jobs.length > 1 ? `جُدول ${r.added}` : 'جُدول التنزيل', 'ok');
     else toast(r.skipped ? `أُضيف ${r.added}، وتُرك ${r.skipped} موجود مسبقاً` : jobs.length > 1 ? `أُضيف ${r.added} إلى الطابور` : 'أُضيف إلى الطابور', 'ok');
     return r;
   } catch (e) {
@@ -49,10 +51,12 @@ export function errorCard(err, { onRetry } = {}) {
 function preview(info, url) {
   const site = siteOf(url);
   const picker = choicePicker({ heights: info.heights, type: preferType });
+  const when = whenPicker();
   const btn = h('button', { id: 'dl', class: 'btn primary wide' }, ic('download'), 'نزّل');
   btn.onclick = async () => {
     btn.disabled = true;
-    await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: picker.args(), thumb: info.thumbnail || '', site: site.id }]);
+    await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: picker.args(), choice: picker.choice(),
+      thumb: info.thumbnail || '', site: site.id, ...when.get() }]);
     btn.disabled = false;
   };
   return h('div', { class: 'card preview' },
@@ -60,7 +64,7 @@ function preview(info, url) {
       info.thumbnail ? h('img', { class: 'thumb', src: info.thumbnail, alt: '', referrerpolicy: 'no-referrer', onerror: (e) => e.target.replaceWith(ic('video', 'thumb ph')) }) : ic('video', 'thumb ph'),
       h('div', { class: 'pv-txt' }, h('b', {}, info.title),
         h('small', {}, [site.name, info.uploader, fmtDur(info.duration)].filter(Boolean).join(' · ')))),
-    picker.el, btn);
+    picker.el, when.el, btn);
 }
 
 export function homeView(ctx) {

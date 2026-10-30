@@ -57,10 +57,12 @@ class SaylPlugin : Plugin() {
                 id = o.getString("id"), url = o.getString("url"), title = o.optString("title"), kind = o.optString("kind", "video"),
                 args = args, thumb = o.optString("thumb").ifEmpty { null }, site = o.optString("site", "other"),
                 folder = o.optString("folder").ifEmpty { null },
+                choice = o.optJSONObject("choice")?.toString(),
+                scheduledAt = o.optLong("scheduledAt", 0), wifiOnly = o.optBoolean("wifiOnly", false),
             )
         }
         val added = store.add(jobs)
-        if (added.isNotEmpty()) DownloadWorker.kick(context)
+        if (added.isNotEmpty()) { DownloadWorker.kick(context); DownloadWorker.scheduleNext(context) }
         call.resolve(JSObject().put("added", added.size).put("skipped", jobs.size - added.size))
     }
 
@@ -103,7 +105,7 @@ class SaylPlugin : Plugin() {
     @PluginMethod
     fun retry(call: PluginCall) {
         val id = call.getString("id") ?: return call.reject("id مطلوب")
-        val j = store.update(id) { if (!it.active) it.copy(state = "queued", attempts = 0, error = null, retryAt = 0, pct = 0f, downloaded = 0) else it }
+        val j = store.update(id) { if (!it.active) it.copy(state = "queued", attempts = 0, error = null, retryAt = 0, pct = 0f, downloaded = 0, scheduledAt = Schedule.FORCE) else it }
         j?.let { Bus.emit("state", it) }
         DownloadWorker.kick(context)
         call.resolve()
@@ -163,6 +165,22 @@ class SaylPlugin : Plugin() {
     @PluginMethod
     fun setConfig(call: PluginCall) {
         call.getInt("parallel")?.let { Bus.setParallel(context, it) }
+        val w = call.getObject("window")?.let {
+            fun min(s: String?) = s?.split(":")?.let { p -> p[0].toInt() * 60 + p[1].toInt() } ?: 0
+            Schedule.Window(it.optBoolean("on"), min(it.optString("from", "01:00")), min(it.optString("to", "07:00")))
+        }
+        Bus.setConfig(context, call.getInt("retries"), w)
+        DownloadWorker.scheduleNext(context)
+        DownloadWorker.kick(context)
+        call.resolve()
+    }
+
+    /** «ابدأ الآن» للمجدول أو المنتظر: يتجاوز الوقت والنافذة */
+    @PluginMethod
+    fun startNow(call: PluginCall) {
+        val id = call.getString("id") ?: return call.reject("id مطلوب")
+        store.update(id) { if (it.pending) it.copy(state = "queued", scheduledAt = Schedule.FORCE, retryAt = 0, wifiOnly = false) else it }?.let { Bus.emit("state", it) }
+        DownloadWorker.kick(context)
         call.resolve()
     }
 

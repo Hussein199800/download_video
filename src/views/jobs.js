@@ -4,6 +4,8 @@ import { Sayl } from '../native.js';
 import { classifyError } from '../errors.js';
 import { activeJobs, onJobs, refreshJobs, forget } from '../state.js';
 import { showDetails } from './details.js';
+import { scheduleLabel, retryLabel } from '../schedule.js';
+import { getSettings } from '../store.js';
 
 const STATE = {
   queued: ['في الانتظار', ''], running: ['يُنزَّل', 'run'], paused: ['موقوف', 'warn'], waiting_network: ['بانتظار الشبكة', 'warn'],
@@ -19,7 +21,9 @@ function jobCard(j) {
   const running = j.state === 'running' && j.pct > 0;
   const meta = j.state === 'running'
     ? [progressLine(j), running ? `${Math.floor(j.pct)}%` : '']
-    : j.state === 'queued' ? ['ينتظر دوره']
+    : j.state === 'queued' ? [scheduleLabel(j) || 'ينتظر دوره']
+      : j.state === 'retrying' ? [retryLabel(j, Date.now(), getSettings().retries)]
+      : j.state === 'waiting_network' ? ['ينتظر عودة الإنترنت ثم يكمل وحده']
       : j.state === 'paused' ? [j.downloaded ? `${progressLine(j)} · موقوف` : 'موقوف قبل البدء'] : [];
   const err = j.state === 'failed' && classifyError(j.error);
   return h('div', { class: `job ${color}`, 'data-id': j.id },
@@ -33,6 +37,7 @@ function jobCard(j) {
     h('div', { class: 'job-acts' },
       (j.state === 'running' || pending) && act('pause', 'إيقاف', () => Sayl.pause(j.id)),
       j.state === 'paused' && act('play', 'استكمال', () => Sayl.resume(j.id), 'primary'),
+      (j.scheduledAt > Date.now() || j.wifiOnly || j.state === 'retrying' || j.state === 'waiting_network') && act('play', 'ابدأ الآن', () => Sayl.startNow(j.id), 'primary'),
       pending && act('top', '', () => Sayl.toTop(j.id), '', 'إلى رأس الطابور'),
       pending && act('up', '', () => Sayl.move(j.id, -1), '', 'للأعلى'),
       pending && act('down', '', () => Sayl.move(j.id, 1), '', 'للأسفل'),

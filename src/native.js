@@ -41,7 +41,7 @@ function mockRun(j) {
     const cur = mockJobs.get(j.id);
     if (!cur || cur.state !== 'running' && cur.state !== 'queued') return clearInterval(t);
     // المجدول والمنتظر للشبكة لا يبدأ في المحرك الوهمي
-    if (cur.scheduledAt > Date.now() || cur.hold) return;
+    if (cur.scheduledAt > Date.now() || cur.wifiOnly || cur.hold) return;
     cur.state = 'running';
     cur.pct = Math.min(100, cur.pct + (cur.slow ? 2 : 25));
     cur.total = 52428800; cur.downloaded = Math.round(cur.total * cur.pct / 100);
@@ -73,6 +73,7 @@ const mock = {
   resume: ({ id }) => { const j = mockJobs.get(id); if (j && j.state === 'paused') { j.state = 'queued'; fire('state', { ...j }); mockRun(j); } return Promise.resolve(); },
   move: ({ id, delta }) => { mockReorder(id, (ids, i) => Math.max(0, Math.min(ids.length - 1, i + delta))); return Promise.resolve(); },
   toTop: ({ id }) => { mockReorder(id, () => 0); return Promise.resolve(); },
+  startNow: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { scheduledAt: -1, wifiOnly: false, state: 'queued' }); fire('state', { ...j }); } return Promise.resolve(); },
   retry: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }); mockRun(j); } return Promise.resolve(); },
   remove: ({ id }) => { mockJobs.delete(id); return Promise.resolve(); },
   clearFinished: () => { for (const [k, j] of mockJobs) if (j.state === 'failed' || j.state === 'canceled') mockJobs.delete(k); return Promise.resolve(); },
@@ -103,6 +104,7 @@ export const Sayl = {
   resume: (id) => P.resume({ id }),
   move: (id, delta) => P.move({ id, delta }),
   toTop: (id) => P.toTop({ id }),
+  startNow: (id) => P.startNow({ id }),
   retry: (id) => P.retry({ id }),
   remove: (id, deleteFile = false) => P.remove({ id, deleteFile }),
   clearFinished: () => P.clearFinished(),

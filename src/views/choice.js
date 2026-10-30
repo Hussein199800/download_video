@@ -41,10 +41,10 @@ export function choicePicker({ heights = [], type } = {}) {
   return {
     el,
     kind: () => state.type,
-    args: () => {
+    choice: () => (state.type === 'video' ? { type: 'video', height: state.height } : { type: 'audio', format: state.audio, kbps: state.kbps }),
+    args() {
       const s2 = getSettings();
-      const choice = state.type === 'video' ? { type: 'video', height: state.height } : { type: 'audio', format: state.audio, kbps: state.kbps };
-      return buildArgs(choice, { aria2: s2.aria2, connections: s2.connections });
+      return buildArgs(this.choice(), { aria2: s2.aria2, connections: s2.connections });
     },
   };
 }

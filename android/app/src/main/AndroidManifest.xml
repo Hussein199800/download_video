@@ -53,6 +53,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- إعادة جدولة التنزيلات المجدولة بعد إعادة تشغيل الهاتف (يستعملها WorkManager) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- الحفظ في مجلد التنزيلات على أندرويد 9 فما دون؛ الأحدث يستعمل MediaStore بلا صلاحية -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <!-- لتثبيت تحديثات «سَيْل» نفسها؛ أندرويد يطلب موافقة المستخدم ويرفض أي توقيع مختلف -->

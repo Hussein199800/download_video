@@ -130,6 +130,22 @@ async function main() {
     check('صفحة التفاصيل تعرض السيرفر والحجم', /سيرفر 1/.test(await page.locator('.sheet').innerText()) && /الحجم/.test(await page.locator('.sheet').innerText()));
     await shot(page, { path: path.join(OUT, 'details.png') });
     await page.keyboard.press('Escape');
+    // الجدولة
+    await page.click('.tabbar [data-tab="home"]');
+    await page.fill('#url', 'https://youtu.be/sched1');
+    await page.click('#go');
+    await page.waitForSelector('#dl');
+    await page.locator('.when .seg [data-v="true"]').click();
+    await page.locator('.when .sw').check();
+    await shot(page, { path: path.join(OUT, 'schedule.png'), fullPage: true });
+    await page.click('#dl');
+    await page.click('.tabbar [data-tab="jobs"]');
+    await page.waitForTimeout(300);
+    const sc = page.locator('.job', { hasText: 'sched1' });
+    check('المجدول يظهر بوقته وشرط الواي فاي', /مجدول: (اليوم|غداً) 02:00 · واي فاي فقط/.test(await sc.innerText()), await sc.innerText());
+    await sc.locator('[data-act="ابدأ الآن"]').click();
+    await page.waitForTimeout(900);
+    check('«ابدأ الآن» يبدأ المجدول', !/مجدول/.test(await text(page)));
     check('لا أخطاء في الصفحة (المدير)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
 
@@ -176,6 +192,8 @@ async function main() {
     await shot(page, { path: path.join(OUT, 'more.png') });
     await page.click('#open-settings');
     await page.click('.theme-opt[data-v="light"]');
+    check('إعدادات إعادة المحاولة ونافذة التنزيل موجودة', /إعادة المحاولة تلقائياً/.test(await text(page)) && /نافذة التنزيل/.test(await text(page)));
+    check('لا يوجد خيار لتحديد السرعة', !/تحديد السرعة|حد السرعة/.test(await text(page)));
     check('الثيم يتغير فوراً', await page.evaluate(() => document.documentElement.dataset.theme) === 'light');
     await shot(page, { path: path.join(OUT, 'settings-light.png'), fullPage: true });
     await page.reload();

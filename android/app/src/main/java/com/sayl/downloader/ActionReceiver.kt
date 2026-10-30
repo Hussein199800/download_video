@@ -33,7 +33,7 @@ object Actions {
             ActionReceiver.PAUSE -> store.pause(id).also { Engine.cancel(id) }
             ActionReceiver.CANCEL -> store.update(id) { if (it.active || it.state == "paused") it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) else it }
                 .also { Engine.cancel(id); if (it?.state == "canceled") DownloadWorker.workDir(ctx, id).deleteRecursively() }
-            ActionReceiver.RESUME -> store.resume(id).also { DownloadWorker.kick(ctx) }
+            ActionReceiver.RESUME -> store.resume(id).also { DownloadWorker.kick(ctx); DownloadWorker.scheduleNext(ctx) }
             else -> null
         }
         j?.let { Bus.emit("state", it) }

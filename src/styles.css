@@ -256,6 +256,12 @@ bdi { unicode-bidi: isolate; }
 .kv dt:nth-last-of-type(1), .kv dd:last-child { border: 0; }
 .log { font-family: ui-monospace, monospace; font-size: .72rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; direction: ltr; text-align: left; max-height: 50vh; overflow: auto; background: var(--input); border-radius: 14px; padding: 10px; }
 
+.time-in { background: var(--input); border: 1.5px solid var(--line); border-radius: 12px; padding: 8px 10px; direction: ltr; min-width: 0; }
+.time-lbl { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--mute); }
+.time-lbl .time-in { flex: 1; }
+.when { display: grid; gap: 8px; }
+.when .set-row { border-bottom: 0; padding: 4px 0; }
+
 /* ---------- الشرح ---------- */
 .guide { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .g-item { border-radius: 20px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden; }
