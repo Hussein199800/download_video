@@ -8,3 +8,6 @@
 - مفتاح التوقيع لا يُرفع أبداً. السرّان: `SAYL_KEYSTORE_BASE64` و`SAYL_KEYSTORE_PASSWORD`.
 - قبل الرفع: `npm test && npm run test:e2e && npm run test:android`.
 - `page.append` يكتب `null` نصاً؛ صفِّ العناصر الاختيارية (`[...].filter(Boolean)`) أو استعمل `h()` الذي يتجاهلها.
+
+## Working preferences
+- اكتب كل الأسئلة والردود للمستخدم بالعربية فقط، بما فيها نص السؤال والعناوين والخيارات والأوصاف في أداة الأسئلة.
