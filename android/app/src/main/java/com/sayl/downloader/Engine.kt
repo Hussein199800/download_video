@@ -67,12 +67,16 @@ object Engine {
 
     fun cancel(id: String) {
         YoutubeDL.getInstance().destroyProcessById(id)
+        Server2.cancel(id)
     }
 
-    /** "DONE" أو "ALREADY_UP_TO_DATE" */
+    /** "DONE" أو "ALREADY_UP_TO_DATE"، على القناة المختارة (مستقرة أو Nightly) */
     fun update(ctx: Context): String {
         init(ctx)
-        return YoutubeDL.getInstance().updateYoutubeDL(ctx.applicationContext, YoutubeDL.UpdateChannel.STABLE)?.name ?: "ALREADY_UP_TO_DATE"
+        val ch = if (Bus.channel(ctx) == "nightly") YoutubeDL.UpdateChannel.NIGHTLY else YoutubeDL.UpdateChannel.STABLE
+        val r = YoutubeDL.getInstance().updateYoutubeDL(ctx.applicationContext, ch)?.name ?: "ALREADY_UP_TO_DATE"
+        Bus.markEngineUpdated(ctx)
+        return r
     }
 
     fun version(ctx: Context): String? {

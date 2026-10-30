@@ -265,6 +265,16 @@ bdi { unicode-bidi: isolate; }
 .when { display: grid; gap: 8px; }
 .when .set-row { border-bottom: 0; padding: 4px 0; }
 
+.comps { display: grid; gap: 0; padding: 4px 14px; }
+.comp { padding: 12px 0; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.comp:last-child { border: 0; }
+.comp-h { display: flex; align-items: center; gap: 12px; }
+.comp-h .l-ic { width: 42px; height: 42px; padding: 10px; border-radius: 14px; }
+.comp-b { display: grid; gap: 6px; padding-inline-start: 54px; }
+.kv-row { display: flex; justify-content: space-between; gap: 8px; font-size: .82rem; color: var(--mute); }
+.kv-row small { color: var(--txt); font-weight: 700; font-size: .82rem; }
+.tag .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; }
+
 /* ---------- الشرح ---------- */
 .guide { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .g-item { border-radius: 20px; background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden; }

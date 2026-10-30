@@ -40,7 +40,12 @@ class SaylPlugin : Plugin() {
     fun info(call: PluginCall) {
         val url = call.getString("url") ?: return call.reject("url مطلوب")
         bg(call) {
-            val json = Engine.info(context, url, Bus.cookies(context).takeIf { it.exists() })
+            val json = try {
+                Engine.info(context, url, Bus.cookies(context).takeIf { it.exists() })
+            } catch (e: Exception) {
+                // السيرفر 1 لم يقرأ الرابط: نجرّب السيرفر 2 إن كان يدعمه وكان الخطأ غير دائم
+                if (Server2.supports(url) && Failure.classify(e.message) != Failure.Kind.PERMANENT) runCatching { Server2.info(url) }.getOrElse { throw e } else throw e
+            }
             call.resolve(JSObject().put("json", json))
         }
     }
@@ -160,6 +165,26 @@ class SaylPlugin : Plugin() {
             val status = Engine.update(context)
             call.resolve(JSObject().put("status", status).put("version", Engine.version(context)))
         }
+    }
+
+    /** صفحة المكوّنات: إصدار كل مكوّن وحالته */
+    @PluginMethod
+    fun components(call: PluginCall) {
+        bg(call) {
+            call.resolve(JSObject()
+                .put("ytdlp", Engine.version(context))
+                .put("channel", Bus.channel(context))
+                .put("ytdlpUpdatedAt", Bus.lastEngineUpdate(context))
+                .put("server2", Server2.VERSION)
+                .put("ffmpeg", java.io.File(context.applicationInfo.nativeLibraryDir, "libffmpeg.so").exists())
+                .put("aria2c", java.io.File(context.applicationInfo.nativeLibraryDir, "libaria2c.so").exists()))
+        }
+    }
+
+    @PluginMethod
+    fun setChannel(call: PluginCall) {
+        Bus.setChannel(context, call.getString("channel") ?: "stable")
+        call.resolve()
     }
 
     @PluginMethod

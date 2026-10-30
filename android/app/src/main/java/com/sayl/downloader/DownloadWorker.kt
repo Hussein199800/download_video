@@ -56,19 +56,19 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
         Bus.emit("state", job)
         val work = workDir(applicationContext, job.id)
         try {
-            val cookies = Bus.cookies(applicationContext).takeIf { it.exists() }
-            val file = Engine.download(applicationContext, job.id, job.url, job.args, work, cookies) { pct, eta, line -> progress(job.id, pct, eta, line) }
+            val file = if (job.engine == 2) server2(job, work) else server1WithFallback(job, work)
             val saved = Saver.publish(applicationContext, file, job.folder)
             // روابط «عدة روابط» تُضاف بعنوان الرابط نفسه؛ نأخذ العنوان الحقيقي من اسم الملف
             val title = if (job.title == job.url) file.nameWithoutExtension.replace(Regex(" \\[[^\\]]+]$"), "") else job.title
             finish(store.update(job.id) { it.copy(state = "done", title = title, pct = 100f, path = saved.path, uri = saved.uri, error = null, speed = 0, finishedAt = System.currentTimeMillis()) })
-        } catch (e: YoutubeDL.CanceledException) {
-            // الإيقاف المؤقت يقتل العملية أيضاً؛ نُبقي حالته وملفه الجزئي
-            if (store.get(job.id)?.state != "paused") finish(store.update(job.id) { it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) })
-            else Bus.emit("state", store.get(job.id)!!)
         } catch (e: Exception) {
             val st = store.get(job.id)?.state
-            if (st == "canceled" || st == "paused") return
+            if (e is YoutubeDL.CanceledException || e is Server2.Canceled || st == "canceled" || st == "paused") {
+                // الإيقاف المؤقت يقتل العملية أيضاً؛ نُبقي حالته وملفه الجزئي
+                if (st == "paused") Bus.emit("state", store.get(job.id)!!)
+                else finish(store.update(job.id) { it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) })
+                return
+            }
             failed(job, (e.message ?: e.toString()).take(4000))
         } finally {
             // الملف الجزئي يبقى للاستكمال ما دامت المهمة موقوفة أو ستُعاد
@@ -77,12 +77,54 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
         }
     }
 
+    private fun server1(job: Job, work: File): File {
+        val cookies = Bus.cookies(applicationContext).takeIf { it.exists() }
+        return Engine.download(applicationContext, job.id, job.url, job.args, work, cookies) { pct, eta, line -> progress(job.id, pct, eta, line) }
+    }
+
+    /** السيرفر 1؛ وعند فشل قابل للإصلاح: تحديث yt-dlp ثم إعادته، ثم السيرفر 2 إن كان يدعم الرابط */
+    private fun server1WithFallback(job: Job, work: File): File {
+        var triedUpdate = false
+        while (true) {
+            try {
+                return server1(job, work)
+            } catch (e: YoutubeDL.CanceledException) {
+                throw e
+            } catch (e: Exception) {
+                val st = store.get(job.id)?.state
+                if (st == "paused" || st == "canceled") throw e
+                val kind = Failure.classify(e.message)
+                when (ServerPolicy.next(kind, job.url, Bus.lastEngineUpdate(applicationContext), System.currentTimeMillis(), triedUpdate, false)) {
+                    ServerPolicy.Step.UPDATE_AND_RETRY -> {
+                        triedUpdate = true
+                        runCatching { Engine.update(applicationContext) }
+                    }
+                    ServerPolicy.Step.SERVER2 -> {
+                        val j = store.update(job.id) { it.copy(engine = 2, pct = 0f, downloaded = 0, total = 0) } ?: throw e
+                        Bus.emit("state", j)
+                        return server2(j, work)
+                    }
+                    else -> throw e
+                }
+            }
+        }
+    }
+
+    private fun server2(job: Job, work: File): File =
+        Server2.download(applicationContext, job, File(work, "s2")) { pct, eta, done, total, speed ->
+            liveProgress(job.id) { it.copy(pct = if (pct >= 0) pct.coerceIn(0f, 100f) else it.pct, eta = eta, downloaded = done, total = total, speed = speed) }
+        }
+
     private fun progress(id: String, pct: Float, eta: Long, line: String) {
         val p = Progress.parse(line)
-        val j = store.live(id) {
+        liveProgress(id) {
             it.copy(pct = if (pct >= 0) pct.coerceIn(0f, 100f) else it.pct, eta = eta, speed = p.speed ?: it.speed,
                 downloaded = p.downloaded ?: it.downloaded, total = p.total ?: it.total)
-        } ?: return
+        }
+    }
+
+    private fun liveProgress(id: String, fn: (Job) -> Job) {
+        val j = store.live(id, fn) ?: return
         val now = System.currentTimeMillis()
         if (now - (lastEmit[id] ?: 0) >= 500) {
             lastEmit[id] = now

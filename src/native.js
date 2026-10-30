@@ -12,6 +12,7 @@ const mockJobs = new Map();
 const listeners = { progress: [], state: [], shared: [] };
 const fire = (ev, data) => listeners[ev].forEach((cb) => cb(data));
 let mockCookies = false;
+let mockChannel = 'stable';
 
 function mockInfo(url) {
   if (/fail|unsupported/.test(url)) return Promise.reject(new Error('ERROR: Unsupported URL: ' + url));
@@ -80,6 +81,8 @@ const mock = {
   open: () => Promise.resolve(),
   share: () => Promise.resolve(),
   engineVersion: () => Promise.resolve({ version: '2026.10.10' }),
+  components: () => Promise.resolve({ ytdlp: '2026.10.10', channel: mockChannel, ytdlpUpdatedAt: 0, server2: 'NewPipe Extractor 0.26.5', ffmpeg: true, aria2c: true }),
+  setChannel: ({ channel }) => { mockChannel = channel; return Promise.resolve(); },
   engineUpdate: () => Promise.resolve({ status: 'ALREADY_UP_TO_DATE', version: '2026.10.10' }),
   setConfig: () => Promise.resolve(),
   abi: () => Promise.resolve({ abi: 'arm64-v8a' }),
@@ -112,6 +115,8 @@ export const Sayl = {
   share: (id) => P.share({ id }),
   engineVersion: async () => (await P.engineVersion()).version,
   engineUpdate: () => P.engineUpdate(),
+  components: () => P.components(),
+  setChannel: (channel) => P.setChannel({ channel }),
   setConfig: (cfg) => P.setConfig(cfg),
   abi: async () => (await P.abi()).abi,
   hasCookies: async () => (await P.hasCookies()).value,

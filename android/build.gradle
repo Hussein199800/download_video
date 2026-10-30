@@ -22,6 +22,8 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // NewPipe Extractor (السيرفر 2) ومكتبة nanojson التي يعتمد عليها
+        maven { url 'https://jitpack.io' }
     }
 }
 

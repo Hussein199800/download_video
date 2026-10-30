@@ -134,22 +134,45 @@ function settingsPage({ page }) {
   );
 }
 
-function enginePage({ page }) {
-  const ver = h('b', { id: 'engine-ver', class: 'ltr' }, '…');
-  const at = h('dd', {}, fmtDate(getMeta().engineCheckAt) || 'لم يُحدَّث بعد');
-  Sayl.engineVersion().then((v) => { ver.textContent = v || 'غير معروف'; }).catch(() => { ver.textContent = 'غير معروف'; });
-  const btn = h('button', { class: 'btn grad c-sky wide' }, ic('retry'), 'حدّث الآن');
-  btn.onclick = async () => {
-    btn.disabled = true;
-    await engineUpdateFlow((v) => { ver.textContent = v; at.textContent = fmtDate(Date.now()); });
-    btn.disabled = false;
+// المكوّنات (الفكرة من VRKA): حالة كل مكوّن وإصداره، وقناة yt-dlp، وزر واحد لكل التحديثات
+function componentsPage({ page }) {
+  const dot = (cls, label) => h('span', { class: `tag ${cls}` }, h('i', { class: 'dot' }), label);
+  const comp = (color, icon, name, sub, right, extra) => h('div', { class: 'comp' },
+    h('div', { class: 'comp-h' }, ic(icon, `l-ic ${color}`), h('span', { class: 'l-txt' }, h('b', {}, name), h('small', {}, sub)), right), extra);
+  const ytVer = h('small', { id: 'engine-ver', class: 'ltr' }, '…');
+  const ytState = h('span', {}, dot('', '…'));
+  const list = h('div', { class: 'card comps' });
+  const channelSeg = h('div');
+  const draw = (c) => {
+    ytVer.textContent = c.ytdlp || 'غير معروف';
+    ytState.replaceChildren(dot(c.ytdlp ? 'ok' : 'bad', c.ytdlp ? 'جاهز' : 'غير جاهز'));
+    channelSeg.replaceChildren(h('div', { class: 'opt-label' }, 'قناة التحديث'), chips(
+      [{ value: 'stable', label: 'مستقرة' }, { value: 'nightly', label: 'Nightly' }], c.channel || 'stable',
+      async (v) => { await Sayl.setChannel(v); toast(v === 'nightly' ? 'اضغط «تحقق من كل التحديثات» للانتقال إلى Nightly' : 'ستُستعمل القناة المستقرة في التحديث القادم'); }, 'c-sky'),
+    h('p', { class: 'hint' }, 'Nightly يصلح أعطال المواقع أسرع (يومياً)، وقد يكون أقل استقراراً. المستقرة أنسب لأغلب الناس.'));
+    list.replaceChildren(
+      comp('c-sky', 'engine', 'سيرفر 1: yt-dlp', 'يغطي أكثر من 1800 موقع', ytState,
+        h('div', { class: 'comp-b' }, h('div', { class: 'kv-row' }, h('span', {}, 'الإصدار المثبّت'), ytVer),
+          h('div', { class: 'kv-row' }, h('span', {}, 'آخر تحديث'), h('small', {}, fmtDate(c.ytdlpUpdatedAt) || 'لم يُحدَّث بعد')), channelSeg)),
+      comp('c-violet', 'servers', 'سيرفر 2: NewPipe', 'بديل تلقائي ليوتيوب وساوندكلاود وباندكامب عند تعطل الأول', dot('ok', 'جاهز'),
+        h('div', { class: 'comp-b' }, h('div', { class: 'kv-row' }, h('span', {}, 'الإصدار'), h('small', { class: 'ltr' }, c.server2 || '')))),
+      comp('c-amber', 'video', 'FFmpeg', 'دمج الصوت والصورة والتحويل إلى MP3', dot(c.ffmpeg ? 'ok' : 'bad', c.ffmpeg ? 'جاهز' : 'غير موجود')),
+      comp('c-slate', 'bolt', 'aria2c', 'محرّك اختياري من الإعدادات', dot(c.aria2c ? 'ok' : 'bad', c.aria2c ? 'جاهز' : 'غير موجود')));
+  };
+  const load = () => Sayl.components().then(draw).catch(() => draw({}));
+  const all = h('button', { id: 'check-all', class: 'btn primary wide' }, ic('retry'), 'تحقق من كل التحديثات');
+  all.onclick = async () => {
+    all.disabled = true;
+    ytState.replaceChildren(dot('run', 'يتحدّث…'));
+    await engineUpdateFlow();
+    await checkApp(true).catch((e) => toast(e.message, 'bad'));
+    await load();
+    all.disabled = false;
   };
   page.append(
-    h('div', { class: 'hero c-sky' }, ic('engine', 'h-ic'), h('small', {}, 'مكوّن التنزيل yt-dlp'), ver),
-    h('div', { class: 'card' }, h('dl', { class: 'kv' }, h('dt', {}, 'آخر تحديث يدوي'), at, h('dt', {}, 'التحديث التلقائي'), h('dd', {}, 'كل أسبوع على الواي فاي'))),
-    btn,
-    h('p', { class: 'hint' }, 'المواقع تغيّر طريقة عملها باستمرار، وyt-dlp يتحدّث ليواكبها. إن فشل تنزيل كان يعمل سابقاً، حدّث المكوّن ثم أعد المحاولة. التحديث لا يحتاج إصداراً جديداً من التطبيق.'),
-  );
+    h('p', { class: 'hint' }, 'المواقع تغيّر طريقة عملها باستمرار. سيرفر 1 يتحدّث وحده كل أسبوع، وعند فشل موقع يتحدّث ثم ينتقل التنزيل إلى سيرفر 2 تلقائياً إن كان يدعمه.'),
+    list, all);
+  load();
 }
 
 async function cookiesPage({ page }) {
@@ -218,7 +241,7 @@ export function moreView({ page, open }) {
     h('div', { class: 'intro' }, h('h2', {}, 'المزيد')),
     h('div', { class: 'lcards' },
       card('open-settings', { color: 'c-slate', icon: 'gear', title: 'الإعدادات', sub: 'المظهر، والجودة الافتراضية، والسرعة', onClick: sub('الإعدادات', settingsPage) }),
-      card('open-engine', { color: 'c-sky', icon: 'engine', title: 'مكوّن التنزيل', sub: 'حدّثه إن فشل موقع كان يعمل', onClick: sub('مكوّن التنزيل', enginePage) }),
+      card('open-engine', { color: 'c-sky', icon: 'servers', title: 'المكوّنات والسيرفرات', sub: 'سيرفر 1 وسيرفر 2 والتحديثات', onClick: sub('المكوّنات والسيرفرات', componentsPage) }),
       card('open-cookies', { color: 'c-green', icon: 'cookie', title: 'ملف cookies', sub: 'للمحتوى الخاص أو الذي يحتاج تسجيل دخول', onClick: sub('ملف cookies', cookiesPage) }),
       card('open-log', { color: 'c-pink', icon: 'bug', title: 'سجل التشخيص', sub: 'آخر الأخطاء لإرسالها للمطوّر', onClick: sub('سجل التشخيص', logPage) })),
     h('h3', { class: 'sec-h' }, 'التطبيق'),

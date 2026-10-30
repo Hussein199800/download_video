@@ -220,6 +220,9 @@ async function main() {
     await page.click('#open-engine');
     await page.waitForSelector('#engine-ver');
     check('إصدار مكوّن التنزيل يظهر', /2026\.10\.10/.test(await page.locator('#engine-ver').innerText()));
+    const ct = await text(page);
+    check('صفحة المكوّنات تعرض السيرفرين وFFmpeg وقناة yt-dlp', /سيرفر 1/.test(ct) && /سيرفر 2/.test(ct) && /FFmpeg/.test(ct) && /Nightly/.test(ct));
+    await shot(page, { path: path.join(OUT, 'components.png') });
     await page.click('.icon-btn[aria-label="رجوع"]');
     await page.click('#check-update');
     await page.waitForTimeout(300);

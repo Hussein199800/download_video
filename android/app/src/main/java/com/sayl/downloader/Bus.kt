@@ -47,5 +47,13 @@ object Bus {
     fun minuteOfDay(now: Long = System.currentTimeMillis()): Int =
         java.util.Calendar.getInstance().apply { timeInMillis = now }.let { it.get(java.util.Calendar.HOUR_OF_DAY) * 60 + it.get(java.util.Calendar.MINUTE) }
 
+    /** آخر تحديث ناجح لـ yt-dlp (يدوي أو تلقائي) */
+    fun lastEngineUpdate(ctx: Context): Long = prefs(ctx).getLong("engineUpdatedAt", 0)
+    fun markEngineUpdated(ctx: Context) = prefs(ctx).edit().putLong("engineUpdatedAt", System.currentTimeMillis()).apply()
+
+    /** قناة yt-dlp: stable أو nightly */
+    fun channel(ctx: Context): String = prefs(ctx).getString("channel", "stable") ?: "stable"
+    fun setChannel(ctx: Context, c: String) = prefs(ctx).edit().putString("channel", if (c == "nightly") "nightly" else "stable").apply()
+
     fun cookies(ctx: Context): File = File(ctx.applicationContext.filesDir, "cookies.txt")
 }
