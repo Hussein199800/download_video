@@ -9,6 +9,7 @@ import { doneJobs, activeJobs, refreshJobs, logError } from '../state.js';
 import { choicePicker, uid } from './choice.js';
 import { whenPicker } from './when.js';
 import { openPlaylist } from './playlist.js';
+import { openBatch } from './batch.js';
 import { engineUpdateFlow, cookiesFlow } from './more.js';
 
 let pendingShared = null;
@@ -126,6 +127,7 @@ export function homeView(ctx) {
     h('div', { class: 'intro' }, h('h2', {}, 'ماذا تريد أن تنزّل؟'), h('p', {}, 'الصق رابطاً من يوتيوب أو فيسبوك أو تيك توك أو إنستغرام أو أي موقع، أو شارك الرابط من التطبيق نفسه إلى سَيْل.')),
     h('div', { class: 'card url-card' },
       h('div', { class: 'url-row' }, input, isNative && h('button', { class: 'icon-btn', 'aria-label': 'لصق', onclick: paste, html: ic('paste').innerHTML }), go),
+      h('button', { id: 'open-batch', class: 'link batch-link', onclick: () => openBatch(ctx) }, ic('links'), 'عدة روابط دفعة واحدة'),
       h('div', { class: 'sites' }, ['يوتيوب', 'فيسبوك', 'تيك توك', 'إنستغرام', 'إكس', '+1800 موقع'].map((s) => h('span', { class: 'site-chip' }, s)))),
     clip,
     result,

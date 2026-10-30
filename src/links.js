@@ -1,5 +1,6 @@
 // استخراج الرابط من نص المشاركة، ومعرفة الموقع لعرض اسمه ولونه
 const URL_RE = /https?:\/\/[^\s<>"'«»]+/i;
+const URL_ALL = /https?:\/\/[^\s<>"'«»]+/gi;
 // علامات ترقيم تلتصق بآخر الرابط عند لصقه داخل جملة
 const TRAILING = /[).,،؛:!?؟\]}'"»]+$/u;
 
@@ -13,6 +14,16 @@ export function extractUrl(text) {
     url = url.replace(/.$/u, '');
   }
   return url;
+}
+
+// كل الروابط في النص، مرة واحدة لكل رابط وبترتيب ظهورها
+export function extractUrls(text) {
+  const seen = new Set();
+  for (const m of String(text ?? '').match(URL_ALL) || []) {
+    const u = extractUrl(m);
+    if (u) seen.add(u);
+  }
+  return [...seen];
 }
 
 const SITES = [

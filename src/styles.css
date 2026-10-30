@@ -138,6 +138,9 @@ bdi { unicode-bidi: isolate; }
 .url-row input { flex: 1; min-width: 0; width: 100%; background: var(--input); border: 1.5px solid var(--line); border-radius: 16px; padding: 13px 14px; font-size: 1rem; outline: none; direction: ltr; text-align: left; transition: border .2s; }
 .url-row input:focus { border-color: var(--pri); }
 .url-row input::placeholder { direction: rtl; text-align: right; color: var(--mute); }
+.batch-link { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font-size: .85rem; }
+.batch-link span { width: 18px; height: 18px; }
+.batch-in { resize: vertical; min-height: 140px; font-family: ui-monospace, monospace; font-size: .85rem; line-height: 1.7; }
 .sites { display: flex; flex-wrap: wrap; gap: 6px; }
 .site-chip { font-size: .72rem; padding: 3px 10px; border-radius: 999px; background: var(--soft); color: var(--mute); }
 

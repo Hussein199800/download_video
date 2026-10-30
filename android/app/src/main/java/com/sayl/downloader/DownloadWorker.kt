@@ -59,7 +59,9 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
             val cookies = Bus.cookies(applicationContext).takeIf { it.exists() }
             val file = Engine.download(applicationContext, job.id, job.url, job.args, work, cookies) { pct, eta, line -> progress(job.id, pct, eta, line) }
             val saved = Saver.publish(applicationContext, file, job.folder)
-            finish(store.update(job.id) { it.copy(state = "done", pct = 100f, path = saved.path, uri = saved.uri, error = null, speed = 0, finishedAt = System.currentTimeMillis()) })
+            // روابط «عدة روابط» تُضاف بعنوان الرابط نفسه؛ نأخذ العنوان الحقيقي من اسم الملف
+            val title = if (job.title == job.url) file.nameWithoutExtension.replace(Regex(" \\[[^\\]]+]$"), "") else job.title
+            finish(store.update(job.id) { it.copy(state = "done", title = title, pct = 100f, path = saved.path, uri = saved.uri, error = null, speed = 0, finishedAt = System.currentTimeMillis()) })
         } catch (e: YoutubeDL.CanceledException) {
             // الإيقاف المؤقت يقتل العملية أيضاً؛ نُبقي حالته وملفه الجزئي
             if (store.get(job.id)?.state != "paused") finish(store.update(job.id) { it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) })

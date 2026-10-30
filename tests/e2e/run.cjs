@@ -130,6 +130,17 @@ async function main() {
     check('صفحة التفاصيل تعرض السيرفر والحجم', /سيرفر 1/.test(await page.locator('.sheet').innerText()) && /الحجم/.test(await page.locator('.sheet').innerText()));
     await shot(page, { path: path.join(OUT, 'details.png') });
     await page.keyboard.press('Escape');
+    // عدة روابط
+    await page.click('.tabbar [data-tab="home"]');
+    await page.click('#open-batch');
+    await page.fill('#batch-text', 'https://youtu.be/m1\nنص https://youtu.be/m2 هنا\nhttps://youtu.be/m1\n');
+    check('عداد الروابط يحذف المكرر', /أضف 2 إلى الطابور/.test(await page.locator('#batch-add').innerText()));
+    await shot(page, { path: path.join(OUT, 'batch.png') });
+    await page.click('#batch-add');
+    await page.waitForTimeout(300);
+    const bt = await text(page);
+    check('الروابط المتعددة في الطابور', bt.includes('youtu.be/m1') && bt.includes('youtu.be/m2'));
+
     // الجدولة
     await page.click('.tabbar [data-tab="home"]');
     await page.fill('#url', 'https://youtu.be/sched1');

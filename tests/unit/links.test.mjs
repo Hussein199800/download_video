@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { extractUrl, siteOf } from '../../src/links.js';
+import { extractUrl, extractUrls, siteOf } from '../../src/links.js';
 
 test('يستخرج الرابط من نص المشاركة', () => {
   assert.equal(extractUrl('شاهد هذا https://vt.tiktok.com/ZS123/ 🔥'), 'https://vt.tiktok.com/ZS123/');
@@ -23,4 +23,15 @@ test('يتعرف على الموقع', () => {
   assert.equal(siteOf('https://vimeo.com/1').id, 'other');
   assert.equal(siteOf('ليس رابطاً').id, 'other');
   assert.equal(siteOf('https://youtu.be/x').name, 'يوتيوب');
+});
+
+test('استخراج عدة روابط: بلا تكرار وبالترتيب', () => {
+  const text = `شاهد https://youtu.be/a 🔥
+
+https://vt.tiktok.com/x/
+  (https://youtu.be/a)
+نص بلا رابط
+https://www.instagram.com/reel/r1/, https://youtu.be/b.`;
+  assert.deepEqual(extractUrls(text), ['https://youtu.be/a', 'https://vt.tiktok.com/x/', 'https://www.instagram.com/reel/r1/', 'https://youtu.be/b']);
+  assert.deepEqual(extractUrls(''), []);
 });
