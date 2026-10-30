@@ -45,3 +45,13 @@ export function setSettings(patch) {
 // أوقات آخر فحص للتحديثات وما شابه
 export const getMeta = () => read(META);
 export const setMeta = (patch) => localStorage.setItem(META, JSON.stringify({ ...read(META), ...patch }));
+
+// ترقيات الإعدادات بين الإصدارات، مرة واحدة لكل ترقية
+export function migrate() {
+  const m = getMeta();
+  if (!m.v11) {
+    // في 1.0 كان aria2c مفعّلاً افتراضياً، وهو يبطئ يوتيوب؛ 1.1 يبدأ بالمنزّل الأصلي
+    setSettings({ aria2: false });
+    setMeta({ v11: true });
+  }
+}

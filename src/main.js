@@ -1,6 +1,6 @@
 import './styles.css';
 import { h, ic, $ } from './ui.js';
-import { getSettings } from './store.js';
+import { getSettings, migrate } from './store.js';
 import { applyTheme } from './theme.js';
 import { startSync, onJobs, activeJobs } from './state.js';
 import { Sayl, isNative } from './native.js';
@@ -71,6 +71,7 @@ function badge() {
 }
 
 async function boot() {
+  migrate();
   applyTheme();
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
   const app = $('#app');

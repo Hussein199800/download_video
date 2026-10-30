@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 const mem = new Map();
 globalThis.localStorage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: (k) => mem.delete(k) };
-const { getSettings, setSettings, DEFAULTS, getMeta, setMeta } = await import('../../src/store.js');
+const { getSettings, setSettings, DEFAULTS, getMeta, setMeta, migrate } = await import('../../src/store.js');
 
 beforeEach(() => mem.clear());
 
@@ -46,4 +46,14 @@ test('بيانات داخلية (أوقات الفحص) منفصلة عن الإ
   setMeta({ appCheckAt: 5 });
   assert.equal(getMeta().appCheckAt, 5);
   assert.equal(getSettings().appCheckAt, undefined);
+});
+
+test('ترقية 1.1: من فعّل aria2c افتراضياً في 1.0 يعود إلى المنزّل الأصلي الأسرع مرة واحدة', () => {
+  mem.set('sayl.settings', JSON.stringify({ aria2: true, theme: 'dark' }));
+  migrate();
+  assert.equal(getSettings().aria2, false);
+  assert.equal(getSettings().theme, 'dark');
+  setSettings({ aria2: true });
+  migrate();
+  assert.equal(getSettings().aria2, true);
 });
