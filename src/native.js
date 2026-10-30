@@ -32,7 +32,8 @@ function mockRun(j) {
     const cur = mockJobs.get(j.id);
     if (!cur || cur.state !== 'running' && cur.state !== 'queued') return clearInterval(t);
     cur.state = 'running';
-    cur.pct = Math.min(100, cur.pct + 25);
+    cur.pct = Math.min(100, cur.pct + (cur.slow ? 2 : 25));
+    cur.total = 52428800; cur.downloaded = Math.round(cur.total * cur.pct / 100);
     cur.speed = 1572864; cur.eta = Math.round((100 - cur.pct) / 25);
     if (cur.pct >= 100) {
       clearInterval(t);
@@ -49,7 +50,7 @@ const mock = {
     for (const j of jobs) {
       const dup = [...mockJobs.values()].some((x) => (x.state === 'queued' || x.state === 'running') && x.url === j.url && JSON.stringify(x.args) === JSON.stringify(j.args));
       if (dup) continue;
-      const job = { ...j, state: 'queued', pct: 0, speed: 0, eta: -1, error: null, path: null, uri: null, attempts: 0, createdAt: Date.now(), finishedAt: 0 };
+      const job = { ...j, slow: /slow/.test(j.url), state: 'queued', pct: 0, speed: 0, eta: -1, error: null, path: null, uri: null, attempts: 0, createdAt: Date.now(), finishedAt: 0 };
       mockJobs.set(j.id, job); added++;
       mockRun(job);
     }

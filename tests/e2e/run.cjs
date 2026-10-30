@@ -87,6 +87,18 @@ async function main() {
       await page.waitForTimeout(50);
     }
     check('الرابط المكرر يُرفض بإشعار', /موجود في الطابور/.test(await page.locator('.toast').innerText()));
+    // تنزيل بطيء لرؤية الأحجام والسرعة
+    await page.click('.tabbar [data-tab="home"]');
+    await page.fill('#url', 'https://youtu.be/slow1');
+    await page.click('#go');
+    await page.waitForSelector('#dl');
+    await page.click('#dl');
+    await page.click('.tabbar [data-tab="jobs"]');
+    await page.waitForTimeout(500);
+    const jt0 = await text(page);
+    check('التنزيل الجاري يعرض كم حُمّل ومن كم وكم بقي', /حُمّل [\d.]+ م.ب من 50.0 م.ب · بقي [\d.]+ م.ب/.test(jt0), jt0.slice(0, 300));
+    check('رأس التنزيلات يعرض السرعة الكلية', /السرعة الآن/.test(jt0) && /1.5 م.ب\/ث/.test(jt0));
+    await shot(page, { path: path.join(OUT, 'jobs-progress.png') });
     check('لا أخطاء في الصفحة (رابط واحد)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
 

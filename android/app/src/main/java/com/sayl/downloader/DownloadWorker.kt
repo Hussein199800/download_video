@@ -43,8 +43,11 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
         try {
             val cookies = Bus.cookies(applicationContext).takeIf { it.exists() }
             val file = Engine.download(applicationContext, job.id, job.url, job.args, work, cookies) { pct, eta, line ->
-                val (_, speed) = Progress.parse(line)
-                val j = store.live(job.id) { it.copy(pct = pct.coerceIn(0f, 100f), eta = eta, speed = speed ?: it.speed) } ?: return@download
+                val p = Progress.parse(line)
+                val j = store.live(job.id) {
+                    it.copy(pct = if (pct >= 0) pct.coerceIn(0f, 100f) else it.pct, eta = eta, speed = p.speed ?: it.speed,
+                        downloaded = p.downloaded ?: it.downloaded, total = p.total ?: it.total)
+                } ?: return@download
                 val now = System.currentTimeMillis()
                 if (now - (lastEmit[job.id] ?: 0) >= 500) {
                     lastEmit[job.id] = now

@@ -17,6 +17,8 @@ data class Job(
     val state: String = "queued",
     val pct: Float = 0f,
     val speed: Long = 0,
+    val downloaded: Long = 0,
+    val total: Long = 0,
     val eta: Long = -1,
     val error: String? = null,
     val path: String? = null,
@@ -30,7 +32,7 @@ data class Job(
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("url", url).put("title", title).put("kind", kind).put("args", JSONArray(args))
         .put("thumb", thumb).put("site", site).put("folder", folder).put("state", state).put("pct", pct.toDouble())
-        .put("speed", speed).put("eta", eta).put("error", error).put("path", path).put("uri", uri)
+        .put("speed", speed).put("downloaded", downloaded).put("total", total).put("eta", eta).put("error", error).put("path", path).put("uri", uri)
         .put("attempts", attempts).put("createdAt", createdAt).put("finishedAt", finishedAt)
 
     companion object {
@@ -42,7 +44,7 @@ data class Job(
                 id = o.getString("id"), url = o.getString("url"), title = o.optString("title"), kind = o.optString("kind", "video"),
                 args = List(a.length()) { a.getString(it) }, thumb = o.str("thumb"), site = o.optString("site", "other"),
                 folder = o.str("folder"), state = o.optString("state", "queued"), pct = o.optDouble("pct", 0.0).toFloat(),
-                speed = o.optLong("speed"), eta = o.optLong("eta", -1), error = o.str("error"), path = o.str("path"),
+                speed = o.optLong("speed"), downloaded = o.optLong("downloaded"), total = o.optLong("total"), eta = o.optLong("eta", -1), error = o.str("error"), path = o.str("path"),
                 uri = o.str("uri"), attempts = o.optInt("attempts"), createdAt = o.optLong("createdAt"), finishedAt = o.optLong("finishedAt"),
             )
         }

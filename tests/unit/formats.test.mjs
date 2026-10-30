@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { buildArgs, parseInfo, OUTPUT_TEMPLATE } from '../../src/formats.js';
 
 const fixture = (n) => JSON.parse(readFileSync(new URL(`../fixtures/${n}.json`, import.meta.url)));
-const S = { aria2: false, retries: 3 };
+const S = { aria2: false, connections: 4 };
 const pair = (args, flag) => args[args.indexOf(flag) + 1];
 const FORBIDDEN = ['-o', '--output', '--exec', '-P', '--paths'];
 
@@ -12,7 +12,8 @@ test('فيديو بدقة محددة', () => {
   const a = buildArgs({ type: 'video', height: 720 }, S);
   assert.equal(pair(a, '-f'), 'bv*[height<=720]+ba/b[height<=720]/b');
   assert.equal(pair(a, '--merge-output-format'), 'mp4');
-  assert.equal(pair(a, '--retries'), '3');
+  assert.equal(pair(a, '--retries'), '10');
+  assert.equal(pair(a, '--fragment-retries'), '10');
   assert.ok(a.includes('--windows-filenames'));
   assert.ok(a.includes('--no-playlist'));
   assert.equal(pair(buildArgs({ type: 'video', height: 'best' }, S), '-f'), 'bv*+ba/b');
@@ -35,14 +36,24 @@ test('الصورة المصغرة تُدمج في MP3 فقط، والفيديو 
   assert.equal(pair(buildArgs({ type: 'video', height: 720 }, S), '-S'), 'res,vcodec:h264,acodec:m4a');
 });
 
-test('aria2c للتسريع', () => {
-  assert.equal(pair(buildArgs({ type: 'video', height: 'best' }, { aria2: true, retries: 3 }), '--downloader'), 'libaria2c.so');
-  assert.ok(!buildArgs({ type: 'video', height: 'best' }, S).includes('--downloader'));
+test('المنزّل الأصلي افتراضياً مع أجزاء متوازية وتقسيم يتجنب خنق يوتيوب', () => {
+  const a = buildArgs({ type: 'video', height: 'best' }, S);
+  assert.equal(pair(a, '-N'), '4');
+  assert.equal(pair(a, '--http-chunk-size'), '10M');
+  assert.ok(!a.includes('--downloader'));
+  assert.equal(pair(buildArgs({ type: 'video', height: 'best' }, { connections: 8 }), '-N'), '8');
+});
+
+test('aria2c اختياري بعدد الاتصالات المختار', () => {
+  const a = buildArgs({ type: 'video', height: 'best' }, { aria2: true, connections: 8 });
+  assert.equal(pair(a, '--downloader'), 'libaria2c.so');
+  assert.equal(pair(a, '--downloader-args'), 'aria2c:-x8 -s8');
+  assert.ok(!a.includes('--http-chunk-size'));
 });
 
 test('لا تحتوي الأوامر على مسار الإخراج أو تنفيذ أوامر', () => {
   for (const c of [{ type: 'video', height: 1080 }, { type: 'audio', format: 'mp3', kbps: 320 }, { type: 'audio', format: 'm4a' }]) {
-    const a = buildArgs(c, { aria2: true, retries: 3 });
+    const a = buildArgs(c, { aria2: true, connections: 4 });
     for (const f of FORBIDDEN) assert.ok(!a.includes(f), `${f} in ${a}`);
   }
 });

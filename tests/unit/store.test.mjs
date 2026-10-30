@@ -11,7 +11,8 @@ test('القيم الافتراضية عند التخزين الفارغ أو ا
   assert.deepEqual(getSettings(), DEFAULTS);
   mem.set('sayl.settings', '{not json');
   assert.deepEqual(getSettings(), DEFAULTS);
-  assert.deepEqual(DEFAULTS, { theme: 'auto', fontScale: 1, video: 'best', audio: 'mp3', kbps: 192, parallel: 1, aria2: true, clipboard: true });
+  assert.deepEqual(DEFAULTS, { theme: 'auto', fontScale: 1, video: 'best', audio: 'mp3', kbps: 192, parallel: 1, aria2: false, clipboard: true,
+    connections: 4, retries: 5, window: { on: false, from: '01:00', to: '07:00' } });
 });
 
 test('الحفظ مع حصر القيم في حدودها', () => {
@@ -28,6 +29,17 @@ test('الحفظ مع حصر القيم في حدودها', () => {
   setSettings({ theme: 'dark', video: 720 });
   assert.equal(getSettings().theme, 'dark');
   assert.equal(getSettings().video, 720);
+});
+
+test('الاتصالات والمحاولات ونافذة التنزيل ضمن القيم المسموحة', () => {
+  setSettings({ connections: 16, retries: 7, window: { on: true, from: '25:00', to: '06:30' } });
+  const s = getSettings();
+  assert.equal(s.connections, 4);
+  assert.equal(s.retries, 5);
+  assert.deepEqual(s.window, { on: true, from: '01:00', to: '06:30' });
+  setSettings({ connections: 8, retries: 0 });
+  assert.equal(getSettings().connections, 8);
+  assert.equal(getSettings().retries, 0);
 });
 
 test('بيانات داخلية (أوقات الفحص) منفصلة عن الإعدادات', () => {

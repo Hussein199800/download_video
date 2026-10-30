@@ -6,7 +6,8 @@ export const OUTPUT_TEMPLATE = '%(title).150B [%(id)s].%(ext)s';
 export const HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
 
 export function buildArgs(choice, settings = {}) {
-  const a = ['--no-playlist', '--windows-filenames', '--no-mtime', '--retries', String(settings.retries ?? 3)];
+  // إعادة المحاولة داخل yt-dlp لكل طلب؛ إعادة المهمة كلها يتولاها العامل
+  const a = ['--no-playlist', '--windows-filenames', '--no-mtime', '--retries', '10', '--fragment-retries', '10'];
   if (choice.type === 'audio') {
     // دمج الصورة في M4A يحتاج مكتبة غير مضمّنة، فيقتصر على MP3
     if (choice.format === 'm4a') a.push('-f', 'ba[ext=m4a]/ba', '-x', '--audio-format', 'm4a', '--embed-metadata');
@@ -16,7 +17,11 @@ export function buildArgs(choice, settings = {}) {
     // عند تساوي الدقة يُفضَّل H.264 وصوت M4A لأنهما يعملان على كل الأجهزة
     a.push('-f', h > 0 ? `bv*[height<=${h}]+ba/b[height<=${h}]/b` : 'bv*+ba/b', '-S', 'res,vcodec:h264,acodec:m4a', '--merge-output-format', 'mp4', '--embed-metadata');
   }
-  if (settings.aria2) a.push('--downloader', 'libaria2c.so');
+  const c = String(settings.connections || 4);
+  // aria2c يفتح عدة اتصالات للملف الواحد ويوتيوب قد يخنقها؛ المنزّل الأصلي مع أجزاء متوازية
+  // وقطع 10 م.ب أسرع وأثبت معه
+  if (settings.aria2) a.push('--downloader', 'libaria2c.so', '--downloader-args', `aria2c:-x${c} -s${c}`);
+  else a.push('-N', c, '--http-chunk-size', '10M');
   return a;
 }
 

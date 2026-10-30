@@ -44,7 +44,7 @@ export function choicePicker({ heights = [], type } = {}) {
     args: () => {
       const s2 = getSettings();
       const choice = state.type === 'video' ? { type: 'video', height: state.height } : { type: 'audio', format: state.audio, kbps: state.kbps };
-      return buildArgs(choice, { aria2: s2.aria2, retries: 3 });
+      return buildArgs(choice, { aria2: s2.aria2, connections: s2.connections });
     },
   };
 }

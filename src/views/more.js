@@ -105,7 +105,9 @@ function settingsPage({ page }) {
         chips([128, 192, 320].map((k) => ({ value: k, label: `${k} ك.ب/ث` })), s.kbps, (v) => set({ kbps: v }), 'c-violet')),
       h('div', { class: 'set-col' }, h('b', {}, 'التنزيلات المتزامنة'), h('small', {}, 'عدد الملفات التي تُنزَّل معاً. واحد أنسب لقوائم التشغيل الطويلة والإنترنت الضعيف.'),
         chips([1, 2, 3].map((n) => ({ value: n, label: String(n) })), s.parallel, (v) => { set({ parallel: v }); Sayl.setConfig({ parallel: v }).catch(() => {}); })),
-      switchRow('تسريع التنزيل (aria2c)', 'يقسم الملف على عدة اتصالات. أوقفه إن فشل موقع ما.', s.aria2, (v) => set({ aria2: v })),
+      h('div', { class: 'set-col' }, h('b', {}, 'عدد الاتصالات'), h('small', {}, 'كم جزءاً يُنزَّل من الملف في الوقت نفسه. 4 مناسب لأغلب الشبكات، و8 للإنترنت السريع.'),
+        chips([2, 4, 8].map((n) => ({ value: n, label: String(n) })), s.connections, (v) => set({ connections: v }), 'c-sky')),
+      switchRow('محرّك aria2c', 'أسرع في المواقع العادية، وقد يبطئ يوتيوب لأنه يخنق الاتصالات الكثيرة. اتركه مطفأً إن لم تحتجه.', s.aria2, (v) => set({ aria2: v })),
       switchRow('اقتراح الرابط المنسوخ', 'عند فتح التطبيق يُعرض الرابط الموجود في الحافظة لتنزيله بضغطة.', s.clipboard, (v) => set({ clipboard: v })),
       h('div', { class: 'set-row' }, h('span', {}, 'مكان الحفظ', h('small', {}, 'مجلد التنزيلات في الهاتف، ولكل قائمة تشغيل مجلد باسمها.')), h('b', { class: 'ltr' }, 'Download/سيل'))),
   );

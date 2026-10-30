@@ -111,4 +111,22 @@ export function fmtBytes(b) {
   return `${b.toFixed(b < 10 && i ? 1 : 0)} ${u[i]}`;
 }
 
+// حجم بمنزلة عشرية واحدة من الميغابايت فما فوق: «23.4 م.ب»
+function size1(b) {
+  const u = ['ب', 'ك.ب', 'م.ب', 'ج.ب'];
+  let i = 0;
+  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+  return `${b.toFixed(i >= 2 ? 1 : 0)} ${u[i]}`;
+}
+
+// «حُمّل 23.4 م.ب من 59.0 م.ب · بقي 35.6 م.ب · 2.1 م.ب/ث · 0:17»
+export function progressLine(j) {
+  if (!j.downloaded) return 'يبدأ…';
+  const parts = [j.total > 0 ? `حُمّل ${size1(j.downloaded)} من ${size1(j.total)}` : `حُمّل ${size1(j.downloaded)}`];
+  if (j.total > j.downloaded) parts.push(`بقي ${size1(j.total - j.downloaded)}`);
+  if (j.speed > 0) parts.push(`${size1(j.speed)}/ث`);
+  if (j.eta > 0) parts.push(fmtDur(j.eta));
+  return parts.join(' · ');
+}
+
 export const fmtDate = (t) => (t ? new Date(t).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' }) : '');

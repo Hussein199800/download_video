@@ -49,6 +49,8 @@ android {
         jniLibs { useLegacyPackaging = true }
     }
     compileOptions {
+        // NewPipe Extractor يحتاج java.nio تحت أندرويد 13
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
     }
@@ -84,6 +86,7 @@ dependencies {
     implementation "io.github.junkfood02.youtubedl-android:library:0.18.1"
     implementation "io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1"
     implementation "io.github.junkfood02.youtubedl-android:aria2c:0.18.1"
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs_nio:2.1.5"
     // الطابور يعمل في الخلفية والتطبيق مغلق
     implementation "androidx.work:work-runtime:2.10.5"
     // org.json الحقيقية لاختبارات JVM (نسخة أندرويد في اختبارات الوحدة مجرد هياكل فارغة)

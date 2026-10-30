@@ -216,6 +216,14 @@ bdi { unicode-bidi: isolate; }
 .bar.wait i { width: 30% !important; animation: wait 1.4s ease-in-out infinite; }
 .job-meta { display: flex; justify-content: space-between; color: var(--mute); font-size: .74rem; }
 
+/* ---------- إحصاءات التنزيلات ---------- */
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.stat { position: relative; overflow: hidden; border-radius: 18px; padding: 12px; border: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); display: grid; gap: 2px; }
+.stat::before { content: ''; position: absolute; inset-inline-start: 0; top: 12px; bottom: 12px; width: 4px; border-radius: 4px; background: linear-gradient(var(--g1), var(--g2)); }
+.stat small { color: var(--mute); font-size: .72rem; }
+.stat b { font-size: 1.05rem; font-weight: 700; }
+.job-meta { flex-wrap: wrap; gap: 4px 10px; }
+
 /* ---------- السجل ---------- */
 .search { width: 100%; background: var(--input); border: 1.5px solid var(--line); border-radius: 16px; padding: 12px 14px; outline: none; }
 .search:focus { border-color: var(--pri); }
