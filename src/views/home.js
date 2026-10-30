@@ -10,6 +10,7 @@ import { choicePicker, uid } from './choice.js';
 import { whenPicker } from './when.js';
 import { openPlaylist } from './playlist.js';
 import { openBatch } from './batch.js';
+import { openStatuses } from './statuses.js';
 import { engineUpdateFlow, cookiesFlow } from './more.js';
 
 let pendingShared = null;
@@ -135,6 +136,7 @@ export function homeView(ctx) {
       gcard({ color: 'c-sky', icon: 'video', title: 'فيديو', sub: 'حتى 4K مع الصوت', onClick: pick('video', 'الصق رابط الفيديو') }),
       gcard({ color: 'c-violet', icon: 'audio', title: 'صوت', sub: 'MP3 أو M4A', onClick: pick('audio', 'الصق الرابط وسيُختار الصوت') }),
       gcard({ color: 'c-amber', icon: 'playlist', title: 'قائمة تشغيل', sub: 'نزّلها كاملة', onClick: pick('video', 'الصق رابط القائمة (فيه list=)') })),
+    (() => { const c = lcard({ color: 'c-wa', icon: 'whatsapp', title: 'حالات واتساب', sub: 'احفظ صور وفيديوهات الحالات التي شاهدتها', onClick: () => openStatuses(ctx) }); c.id = 'open-statuses'; return c; })(),
     recent.length ? h('h3', { class: 'sec-h' }, 'آخر التنزيلات') : null,
     recent.length ? h('div', { class: 'lcards' }, recent.map((j) => lcard({
       color: j.kind === 'audio' ? 'c-violet' : 'c-sky', icon: j.kind === 'audio' ? 'audio' : 'video', title: j.title, sub: j.path || '',

@@ -4,6 +4,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 const native = Capacitor.isNativePlatform();
 const Plugin = native ? registerPlugin('Sayl') : null;
 const UpdaterPlugin = native ? registerPlugin('Updater') : null;
+const StatusesPlugin = native ? registerPlugin('Statuses') : null;
 
 export const isNative = native;
 
@@ -140,4 +141,28 @@ export const AppUpdater = {
   install: () => U.install(),
   status: async () => (await U.status()).ready,
   onProgress: (cb) => U.addListener('progress', cb),
+};
+
+// حالات واتساب (StatusPlugin.kt)؛ المحرك الوهمي فيه 4 حالات لواتساب، وواتساب أعمال غير مثبّت
+const mockStatus = { granted: false, saved: new Set() };
+const mockItems = [
+  { name: 'a1.jpg', video: false, duration: 0 }, { name: 'a2.mp4', video: true, duration: 15 },
+  { name: 'a3.jpg', video: false, duration: 0 }, { name: 'a4.mp4', video: true, duration: 42 },
+];
+const mockStatuses = {
+  access: ({ app }) => Promise.resolve({ granted: app === 'wa' && mockStatus.granted, installed: app === 'wa' }),
+  request: () => { mockStatus.granted = true; return Promise.resolve({ granted: true }); },
+  list: ({ app }) => Promise.resolve({ items: app === 'wa' ? mockItems.map((i, n) => ({ ...i, size: 1e6, time: Date.now() - n * 6e5, thumb: null, saved: mockStatus.saved.has(i.name) })) : [] }),
+  save: ({ names }) => { names.forEach((n) => mockStatus.saved.add(n)); return Promise.resolve({ saved: names.length }); },
+  open: () => Promise.resolve(),
+};
+const ST = StatusesPlugin || mockStatuses;
+export const Statuses = {
+  access: (app) => ST.access({ app }),
+  request: (app) => ST.request({ app }),
+  list: async (app) => (await ST.list({ app })).items,
+  save: (app, names) => ST.save({ app, names }),
+  open: (app, name) => ST.open({ app, name }),
+  // الصور المصغرة ملفات في ذاكرة التطبيق المؤقتة؛ WebView يقرؤها بهذا الرابط
+  src: (path) => (path ? Capacitor.convertFileSrc(path) : null),
 };

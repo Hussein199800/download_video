@@ -181,6 +181,31 @@ async function main() {
     check('لا أخطاء في الصفحة (القائمة)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
 
+    // ---------- حالات واتساب ----------
+    page = await newPage(browser, base);
+    await page.click('#open-statuses');
+    check('شاشة الحالات تشرح الإذن قبل طلبه', /السماح بالوصول/.test(await text(page)) && /24 ساعة/.test(await text(page)));
+    await shot(page, { path: path.join(OUT, 'statuses-access.png') });
+    await page.click('#grant');
+    await page.waitForSelector('.st-grid .st-item');
+    check('تظهر الحالات بعد الإذن', await page.locator('.st-item').count() === 4);
+    check('الفيديو عليه مدته', /0:15/.test(await page.locator('.st-grid').innerText()));
+    await page.locator('.st-item .st-check').nth(0).click();
+    await page.locator('.st-item .st-check').nth(1).click();
+    check('زر حفظ المحدد يعدّ', /احفظ 2/.test(await page.locator('#st-save').innerText()));
+    await page.click('#st-save');
+    await page.waitForTimeout(300);
+    check('المحفوظ يُعلَّم ✓', await page.locator('.st-item.saved').count() === 2);
+    await shot(page, { path: path.join(OUT, 'statuses.png') });
+    await page.click('#st-all');
+    await page.waitForTimeout(300);
+    check('حفظ الكل', await page.locator('.st-item.saved').count() === 4);
+    await page.click('.st-tabs [data-v="w4b"]');
+    await page.waitForTimeout(200);
+    check('واتساب أعمال غير مثبت: رسالة واضحة', /غير مثبّت/.test(await text(page)));
+    check('لا أخطاء في الصفحة (الحالات)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+
     // ---------- الأخطاء ----------
     page = await newPage(browser, base);
     await page.fill('#url', 'https://example.com/unsupported');
