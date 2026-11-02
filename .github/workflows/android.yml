@@ -73,8 +73,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VER=$(node -p "require('./package.json').version")
+          # sayl.apk: اسم ثابت لرابط releases/latest/download/sayl.apk (نسخة arm64-v8a)
+          cp "sayl-$VER-arm64-v8a.apk" sayl.apk
           if gh release view "v$VER" >/dev/null 2>&1; then
-            echo "الإصدار v$VER منشور مسبقاً"
+            echo "الإصدار v$VER منشور مسبقاً، تحديث sayl.apk"
+            gh release upload "v$VER" sayl.apk --clobber
           else
-            gh release create "v$VER" sayl-$VER-*.apk --title "سَيْل $VER" --notes-file release-notes.md --target "$GITHUB_SHA"
+            gh release create "v$VER" sayl-$VER-*.apk sayl.apk --title "سَيْل $VER" --notes-file release-notes.md --target "$GITHUB_SHA"
           fi
