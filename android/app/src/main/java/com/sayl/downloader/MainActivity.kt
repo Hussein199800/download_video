@@ -14,8 +14,10 @@ class MainActivity : BridgeActivity() {
         registerPlugin(SaylPlugin::class.java)
         registerPlugin(UpdaterPlugin::class.java)
         registerPlugin(StatusPlugin::class.java)
+        registerPlugin(MediaPlugin::class.java)
         super.onCreate(savedInstanceState)
         DownloadWorker.ensureChannels(this)
+        MediaWorker.ensureChannel(this)
         askPermissions()
     }
 

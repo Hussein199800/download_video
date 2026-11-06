@@ -4,4 +4,7 @@
     <string name="title_activity_main">سَيْل</string>
     <string name="package_name">com.sayl.downloader</string>
     <string name="custom_url_scheme">com.sayl.downloader</string>
+    <string name="paste_short">نزّل المنسوخ</string>
+    <string name="paste_long">نزّل الرابط المنسوخ</string>
+    <string name="tile_label">نزّل المنسوخ</string>
 </resources>

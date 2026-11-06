@@ -28,7 +28,26 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <!-- «نزّل المنسوخ» من البلاطة أو الاختصار: يفتح التطبيق ويقرأ الحافظة وهو في المقدمة -->
+            <intent-filter>
+                <action android:name="com.sayl.downloader.PASTE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- بلاطة «نزّل المنسوخ» في الإعدادات السريعة -->
+        <service
+            android:name=".ClipTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_paste"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="false" />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -40,10 +59,10 @@
 
         <receiver android:name=".ActionReceiver" android:exported="false" />
 
-        <!-- عامل التنزيل يعمل كخدمة أمامية من نوع نقل البيانات -->
+        <!-- عامل التنزيل خدمة أمامية لنقل البيانات، وعامل المعالجة لمعالجة الوسائط (أندرويد 15+) -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
-            android:foregroundServiceType="dataSync"
+            android:foregroundServiceType="dataSync|mediaProcessing"
             tools:node="merge"
         />
     </application>
@@ -53,12 +72,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
     <!-- إعادة جدولة التنزيلات المجدولة بعد إعادة تشغيل الهاتف (يستعملها WorkManager) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- الحفظ في مجلد التنزيلات على أندرويد 9 فما دون؛ الأحدث يستعمل MediaStore بلا صلاحية -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    <!-- قراءة حالات واتساب على أندرويد 8–10؛ من 11 يمنح المستخدم إذن المجلد نفسه فقط -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <!-- قراءة حالات واتساب على أندرويد 8–10، و«كل وسائط الجهاز» في المكتبة حتى أندرويد 12 (باختيار المستخدم فقط) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!-- «كل وسائط الجهاز» في المكتبة على أندرويد 13+؛ لا تُطلب إلا إذا فعّلها المستخدم بنفسه بعد شرحها -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
 
     <!-- لمعرفة إن كان واتساب أو واتساب أعمال مثبّتاً (أندرويد 11+) -->
     <queries>

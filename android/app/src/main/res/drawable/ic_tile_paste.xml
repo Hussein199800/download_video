@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- أيقونة بلاطة «نزّل المنسوخ» والاختصار: لوح حافظة فيه سهم تنزيل -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M9,4H7.5A2.5,2.5 0,0 0,5 6.5v12A2.5,2.5 0,0 0,7.5 21h9a2.5,2.5 0,0 0,2.5 -2.5v-12A2.5,2.5 0,0 0,16.5 4H15M9,3h6v3H9zM12,9.5v7M9,13.5l3,3 3,-3" />
+</vector>

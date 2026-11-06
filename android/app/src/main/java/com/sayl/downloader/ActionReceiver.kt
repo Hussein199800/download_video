@@ -9,6 +9,7 @@ import android.content.Intent
 class ActionReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         val id = intent.getStringExtra("id") ?: return
+        if (intent.action == MEDIA_CANCEL) return MediaWorker.cancel(ctx, id)
         Actions.apply(ctx, intent.action ?: return, id)
     }
 
@@ -16,6 +17,7 @@ class ActionReceiver : BroadcastReceiver() {
         const val PAUSE = "com.sayl.downloader.PAUSE"
         const val RESUME = "com.sayl.downloader.RESUME"
         const val CANCEL = "com.sayl.downloader.CANCEL"
+        const val MEDIA_CANCEL = "com.sayl.downloader.MEDIA_CANCEL"
 
         fun intent(ctx: Context, action: String, id: String): PendingIntent = PendingIntent.getBroadcast(
             ctx, (action + id).hashCode(),

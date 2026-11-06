@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- اختصار عند الضغط المطوّل على أيقونة سَيْل: يفتح التطبيق ويقرأ الرابط المنسوخ مباشرة -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="paste"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_paste"
+        android:shortcutShortLabel="@string/paste_short"
+        android:shortcutLongLabel="@string/paste_long">
+        <intent
+            android:action="com.sayl.downloader.PASTE"
+            android:targetPackage="com.sayl.downloader"
+            android:targetClass="com.sayl.downloader.MainActivity" />
+    </shortcut>
+</shortcuts>

@@ -236,18 +236,56 @@ object Server2 {
     }
 }
 
-/** تشغيل FFmpeg المضمّن في youtubedl-android مباشرة، بالبيئة نفسها التي يستعملها yt-dlp. */
+/** تشغيل FFmpeg وffprobe المضمّنين في youtubedl-android مباشرة، بالبيئة نفسها التي يستعملها yt-dlp. */
 object FFmpeg {
-    fun run(ctx: Context, args: List<String>) {
+    class Canceled : Exception("أُلغيت العملية")
+
+    private fun process(ctx: Context, bin: String, args: List<String>): ProcessBuilder {
         Engine.init(ctx)
         val app = ctx.applicationContext
         val base = File(app.noBackupFilesDir, "youtubedl-android/packages")
-        val bin = File(app.applicationInfo.nativeLibraryDir, "libffmpeg.so")
-        val pb = ProcessBuilder(listOf(bin.path, "-hide_banner", "-loglevel", "error") + args).redirectErrorStream(true)
+        val exe = File(app.applicationInfo.nativeLibraryDir, bin)
+        val pb = ProcessBuilder(listOf(exe.path) + args).redirectErrorStream(true)
         pb.environment()["LD_LIBRARY_PATH"] = listOf("python", "ffmpeg", "aria2c").joinToString(":") { File(base, "$it/usr/lib").path }
         pb.environment()["TMPDIR"] = app.cacheDir.path
-        val p = pb.start()
+        return pb
+    }
+
+    fun run(ctx: Context, args: List<String>) {
+        val p = process(ctx, "libffmpeg.so", listOf("-hide_banner", "-loglevel", "error") + args).start()
         val out = p.inputStream.bufferedReader().readText()
         if (p.waitFor() != 0) throw IllegalStateException("FFmpeg: ${out.takeLast(500)}")
+    }
+
+    /**
+     * تشغيل مع التقدم والإلغاء: كل سطر من «-progress» يمر على onLine، وcanceled() تُفحص باستمرار.
+     * عند الفشل تُعاد آخر الأسطر سبباً للخطأ.
+     */
+    fun exec(ctx: Context, args: List<String>, canceled: () -> Boolean, onLine: (String) -> Unit) {
+        val p = process(ctx, "libffmpeg.so", listOf("-nostdin", "-loglevel", "error", "-progress", "pipe:1", "-nostats") + args).start()
+        val tail = ArrayDeque<String>()
+        val reader = Thread {
+            runCatching {
+                p.inputStream.bufferedReader().forEachLine { line ->
+                    onLine(line)
+                    if (!line.contains('=') || line.startsWith("[")) { tail.addLast(line); if (tail.size > 30) tail.removeFirst() }
+                }
+            }
+        }.apply { start() }
+        while (true) {
+            if (p.waitFor(300, java.util.concurrent.TimeUnit.MILLISECONDS)) break
+            if (canceled()) { p.destroy(); if (!p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS)) p.destroyForcibly(); reader.join(1000); throw Canceled() }
+        }
+        reader.join(2000)
+        if (p.exitValue() != 0) throw IllegalStateException(tail.joinToString("\n").takeLast(800).ifBlank { "FFmpeg توقف برمز ${p.exitValue()}" })
+    }
+
+    /** خصائص الملف بـ ffprobe بصيغة JSON */
+    fun probe(ctx: Context, path: String): MediaArgs.Probe {
+        val p = process(ctx, "libffprobe.so", listOf("-v", "error", "-show_format", "-show_streams", "-of", "json", path)).start()
+        val out = p.inputStream.bufferedReader().readText()
+        if (!p.waitFor(60, java.util.concurrent.TimeUnit.SECONDS)) { p.destroyForcibly(); throw IllegalStateException("انتهت مهلة قراءة الملف") }
+        if (p.exitValue() != 0) throw IllegalStateException("تعذّرت قراءة الملف؛ قد يكون تالفاً أو بصيغة غير مدعومة")
+        return MediaArgs.parseProbe(out.substring(out.indexOf('{').coerceAtLeast(0)))
     }
 }

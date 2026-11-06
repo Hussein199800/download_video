@@ -243,20 +243,39 @@ class SaylPlugin : Plugin() {
         call.resolve()
     }
 
-    /** النص الذي شاركه المستخدم من تطبيق آخر عند فتح التطبيق، مرة واحدة */
+    /** ما فُتح به التطبيق، مرة واحدة: نص شاركه المستخدم، أو طلب «نزّل المنسوخ» من البلاطة أو الاختصار */
     @PluginMethod
     fun takeSharedText(call: PluginCall) {
         val i = activity?.intent
         val text = if (i?.action == Intent.ACTION_SEND) i.getStringExtra(Intent.EXTRA_TEXT) else null
-        if (text != null) activity.intent = Intent(Intent.ACTION_MAIN)
-        call.resolve(JSObject().put("text", text))
+        val paste = i?.action == ClipTileService.ACTION_PASTE
+        if (text != null || paste) activity.intent = Intent(Intent.ACTION_MAIN)
+        call.resolve(JSObject().put("text", text).put("paste", paste))
     }
 
     override fun handleOnNewIntent(intent: Intent) {
         super.handleOnNewIntent(intent)
-        if (intent.action == Intent.ACTION_SEND) {
-            intent.getStringExtra(Intent.EXTRA_TEXT)?.let { notifyListeners("shared", JSObject().put("text", it)) }
-            activity.intent = Intent(Intent.ACTION_MAIN)
+        when (intent.action) {
+            Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)?.let { notifyListeners("shared", JSObject().put("text", it)) }
+            ClipTileService.ACTION_PASTE -> notifyListeners("paste", JSObject())
+            else -> return
+        }
+        activity.intent = Intent(Intent.ACTION_MAIN)
+    }
+
+    /** يطلب من أندرويد 13+ إضافة بلاطة «نزّل المنسوخ» إلى الإعدادات السريعة بنافذة تأكيد واحدة */
+    @PluginMethod
+    fun requestTile(call: PluginCall) {
+        if (Build.VERSION.SDK_INT < 33) return call.resolve(JSObject().put("result", "unsupported"))
+        val sbm = context.getSystemService(android.app.StatusBarManager::class.java)
+        sbm.requestAddTileService(
+            android.content.ComponentName(context, ClipTileService::class.java),
+            context.getString(R.string.tile_label),
+            android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_tile_paste),
+            context.mainExecutor,
+        ) { code ->
+            // 0: رُفض، 1: موجودة مسبقاً، 2: أُضيفت
+            call.resolve(JSObject().put("result", when (code) { 2 -> "added"; 1 -> "exists"; else -> "denied" }))
         }
     }
 

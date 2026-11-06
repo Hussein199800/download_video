@@ -91,6 +91,10 @@ dependencies {
     implementation "com.github.TeamNewPipe:NewPipeExtractor:v0.26.5"
     // قراءة مجلد حالات واتساب بإذن المستخدم
     implementation "androidx.documentfile:documentfile:1.1.0"
+    // الضغط والقص الدقيق والدمج بالترميز عبر العتاد (MediaCodec)؛ FFmpeg بديل عند تعذّره
+    implementation "androidx.media3:media3-transformer:1.10.1"
+    implementation "androidx.media3:media3-effect:1.10.1"
+    implementation "androidx.media3:media3-common:1.10.1"
     // الطابور يعمل في الخلفية والتطبيق مغلق
     implementation "androidx.work:work-runtime:2.10.5"
     // org.json الحقيقية لاختبارات JVM (نسخة أندرويد في اختبارات الوحدة مجرد هياكل فارغة)

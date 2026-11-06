@@ -12,6 +12,21 @@ object Bus {
     fun store(ctx: Context): JobStore =
         store ?: JobStore(File(ctx.applicationContext.filesDir, "jobs.json")).also { store = it }
 
+    @Volatile
+    private var tasks: TaskStore? = null
+
+    /** طابور المعالجة (تحويل وضغط وقص ودمج) */
+    @Synchronized
+    fun tasks(ctx: Context): TaskStore =
+        tasks ?: TaskStore(File(ctx.applicationContext.filesDir, "tasks.json")).also { tasks = it }
+
+    @Volatile
+    var taskListener: ((MediaTask) -> Unit)? = null
+
+    fun emitTask(t: MediaTask) {
+        runCatching { taskListener?.invoke(t) }
+    }
+
     /** الواجهة تستمع للتقدم وتغيّر الحالة؛ null والتطبيق مغلق */
     @Volatile
     var listener: ((event: String, job: Job) -> Unit)? = null

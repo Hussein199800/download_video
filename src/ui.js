@@ -1,5 +1,6 @@
 // أدوات بناء الواجهة: عناصر DOM، وإشعار قصير، ونافذة سفلية، وبطاقات
 import { icons } from './icons.js';
+import { LOCALE, iso } from './text.js';
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -33,7 +34,8 @@ export function toast(msg, kind = '') {
 
 // نافذة سفلية؛ تعيد دالة الإغلاق
 export function sheet(...content) {
-  const close = () => { m.remove(); document.removeEventListener('keydown', esc); };
+  const prev = document.activeElement;
+  const close = () => { m.remove(); document.removeEventListener('keydown', esc); prev?.focus?.({ preventScroll: true }); };
   const esc = (e) => e.key === 'Escape' && close();
   const box = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true' }, ...content);
   const m = h('div', { class: 'modal', onclick: (e) => e.target === m && close() }, box);
@@ -60,9 +62,10 @@ export const gcard = ({ color, icon, title, sub, onClick }) =>
   h('button', { class: `gcard ${color}`, onclick: onClick }, ic(icon, 'g-ic'), h('b', {}, title), sub && h('small', {}, sub));
 
 // بطاقة قائمة: أيقونة ملونة + عنوان + سطر شرح + سهم
-export const lcard = ({ color, icon, title, sub, onClick, end }) =>
+// sub نص أو عنصر جاهز (مثل pathText)؛ clamp يقص العنوان الطويل بعد سطرين
+export const lcard = ({ color, icon, title, sub, onClick, end, clamp }) =>
   h('button', { class: 'lcard', onclick: onClick },
-    ic(icon, `l-ic ${color}`), h('span', { class: 'l-txt' }, h('b', {}, title), sub && h('small', {}, sub)),
+    ic(icon, `l-ic ${color}`), h('span', { class: 'l-txt' }, h('b', { class: clamp ? 'clamp2' : '', dir: clamp ? 'auto' : null }, title), sub && (sub.nodeType ? sub : h('small', {}, sub))),
     end ?? ic('chevL', 'l-go'));
 
 export function seg(options, value, onChange, cls = '') {
@@ -103,21 +106,21 @@ export const fmtDur = (s) => {
   return hh ? `${hh}:${p(mm)}:${p(ss)}` : `${mm}:${p(ss)}`;
 };
 
+const UNITS = ['ب', 'ك.ب', 'م.ب', 'ج.ب'];
+function scaled(b, digits) {
+  let i = 0;
+  while (b >= 1024 && i < UNITS.length - 1) { b /= 1024; i++; }
+  return `${b.toFixed(digits(b, i))} ${UNITS[i]}`;
+}
+
+// «23 م.ب» معزولاً اتجاهياً حتى لا ينقلب داخل الجملة العربية
 export function fmtBytes(b) {
   if (!b || b < 0) return '';
-  const u = ['ب', 'ك.ب', 'م.ب', 'ج.ب'];
-  let i = 0;
-  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-  return `${b.toFixed(b < 10 && i ? 1 : 0)} ${u[i]}`;
+  return iso(scaled(b, (v, i) => (v < 10 && i ? 1 : 0)));
 }
 
 // حجم بمنزلة عشرية واحدة من الميغابايت فما فوق: «23.4 م.ب»
-function size1(b) {
-  const u = ['ب', 'ك.ب', 'م.ب', 'ج.ب'];
-  let i = 0;
-  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-  return `${b.toFixed(i >= 2 ? 1 : 0)} ${u[i]}`;
-}
+const size1 = (b) => iso(scaled(b, (v, i) => (i >= 2 ? 1 : 0)));
 
 // «حُمّل 23.4 م.ب من 59.0 م.ب · بقي 35.6 م.ب · 2.1 م.ب/ث · 0:17»
 export function progressLine(j) {
@@ -125,8 +128,32 @@ export function progressLine(j) {
   const parts = [j.total > 0 ? `حُمّل ${size1(j.downloaded)} من ${size1(j.total)}` : `حُمّل ${size1(j.downloaded)}`];
   if (j.total > j.downloaded) parts.push(`بقي ${size1(j.total - j.downloaded)}`);
   if (j.speed > 0) parts.push(`${size1(j.speed)}/ث`);
-  if (j.eta > 0) parts.push(fmtDur(j.eta));
+  if (j.eta > 0) parts.push(iso(fmtDur(j.eta)));
   return parts.join(' · ');
 }
 
-export const fmtDate = (t) => (t ? new Date(t).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' }) : '');
+export const fmtDate = (t) => (t ? new Date(t).toLocaleString(LOCALE, { dateStyle: 'medium', timeStyle: 'short' }) : '');
+export const fmtNum = (n, digits = 0) => Number(n || 0).toLocaleString(LOCALE, { maximumFractionDigits: digits });
+export const pct = (n) => iso(`${Math.round(n)}%`);
+
+// رابط طويل داخل سطر عربي: من اليسار لليمين ويُقص بنقاط
+export const urlText = (url, cls = '') => h('bdi', { class: `url ell ${cls}`, dir: 'ltr' }, String(url || '').replace(/^https?:\/\/(www\.)?/, ''));
+
+// «Download/سيل/قائمة/اسم.mp4» → «التنزيلات ← سيل ← قائمة ← اسم.mp4» كل جزء معزول
+export function pathText(p) {
+  const segs = String(p || '').split('/').filter(Boolean).map((x, i) => (i === 0 && x === 'Download' ? 'التنزيلات' : x));
+  return h('small', { class: 'ell', title: p || '' }, segs.map(iso).join(' ← '));
+}
+
+// زر ⓘ يشرح من أين جاء الرقم وكيف حُسب
+export const infoBtn = (title, text) => h('button', { class: 'info-btn', type: 'button', 'aria-label': `شرح: ${title}`,
+  onclick: (e) => { e.stopPropagation(); const close = sheet(h('h3', {}, title), h('p', { class: 'muted' }, text), h('button', { class: 'btn ghost wide', onclick: () => close() }, 'فهمت')); },
+  html: icons.info });
+
+// علامة «محفوظ ✓» تظهر لحظة بجانب الإعداد بعد حفظه
+export function savedMark() {
+  const el = h('span', { class: 'saved-mark', role: 'status', 'aria-live': 'polite' }, 'محفوظ ✓');
+  let t;
+  el.flash = () => { el.classList.add('on'); clearTimeout(t); t = setTimeout(() => el.classList.remove('on'), 1400); };
+  return el;
+}

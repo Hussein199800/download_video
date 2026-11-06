@@ -90,7 +90,8 @@ const mock = {
   hasCookies: () => Promise.resolve({ value: mockCookies }),
   importCookies: () => { mockCookies = true; return Promise.resolve(); },
   clearCookies: () => { mockCookies = false; return Promise.resolve(); },
-  takeSharedText: () => Promise.resolve({ text: null }),
+  takeSharedText: () => Promise.resolve({ text: null, paste: false }),
+  requestTile: () => Promise.resolve({ result: 'unsupported' }),
   addListener: (ev, cb) => { listeners[ev]?.push(cb); return Promise.resolve({ remove() {} }); },
 };
 
@@ -123,9 +124,27 @@ export const Sayl = {
   hasCookies: async () => (await P.hasCookies()).value,
   importCookies: () => P.importCookies(),
   clearCookies: () => P.clearCookies(),
-  takeSharedText: async () => (await P.takeSharedText()).text,
+  // ما فُتح به التطبيق: نص مشارَك، أو طلب «نزّل المنسوخ» من البلاطة أو الاختصار
+  takeLaunch: async () => { const r = await P.takeSharedText(); return { text: r.text || null, paste: Boolean(r.paste) }; },
   onProgress: (cb) => { P.addListener('progress', cb); P.addListener('state', cb); },
   onShared: (cb) => P.addListener('shared', (e) => cb(e.text)),
+  onPasteRequest: (cb) => P.addListener('paste', () => cb()),
+  // إضافة بلاطة «نزّل المنسوخ» إلى الإعدادات السريعة (أندرويد 13+)
+  requestTile: async () => (await P.requestTile()).result,
+};
+
+// الحافظة: في المتصفح والاختبارات تُقرأ من window.__clip
+export const Clip = {
+  read: async () => {
+    if (!native) return String(window.__clip ?? '');
+    const { Clipboard } = await import('@capacitor/clipboard');
+    return (await Clipboard.read()).value || '';
+  },
+  write: async (text) => {
+    if (!native) { window.__clip = text; return; }
+    const { Clipboard } = await import('@capacitor/clipboard');
+    await Clipboard.write({ string: text });
+  },
 };
 
 // تحديث التطبيق نفسه: التنزيل والتحقق من الحزمة والتوقيع ثم التثبيت (Updater.kt)

@@ -2,6 +2,8 @@ import './styles.css';
 import { h, ic, $ } from './ui.js';
 import { getSettings, migrate } from './store.js';
 import { applyTheme } from './theme.js';
+import { watchLayout } from './layout.js';
+import { suggestClip, hideBubble } from './clip.js';
 import { startSync, onJobs, activeJobs } from './state.js';
 import { Sayl, isNative } from './native.js';
 import { homeView, handleSharedText } from './views/home.js';
@@ -73,6 +75,7 @@ function badge() {
 async function boot() {
   migrate();
   applyTheme();
+  watchLayout();
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
   const app = $('#app');
   app.replaceChildren(
@@ -86,13 +89,21 @@ async function boot() {
   onJobs(badge);
   badge();
   syncNative();
-  // المشاركة من تطبيق آخر: عند الفتح وأثناء العمل
-  Sayl.takeSharedText().then((t) => t && handleSharedText(t, { go, open })).catch(() => {});
-  Sayl.onShared((t) => handleSharedText(t, { go, open }));
+  // المشاركة من تطبيق آخر، أو «نزّل المنسوخ» من البلاطة والاختصار: عند الفتح وأثناء العمل
+  const openUrl = (t) => { hideBubble(); handleSharedText(t, { go, open }); };
+  const pasteNow = () => suggestClip(openUrl, { direct: true });
+  const launch = await Sayl.takeLaunch().catch(() => ({}));
+  if (launch.text) openUrl(launch.text);
+  else if (launch.paste) pasteNow();
+  else setTimeout(() => suggestClip(openUrl), 500);
+  Sayl.onShared(openUrl);
+  Sayl.onPasteRequest(pasteNow);
+  // العودة إلى التطبيق: اقتراح الرابط المنسوخ دون إعادة رسم الصفحة (يبقى ما كُتب كما هو)
+  window.addEventListener('focus', () => setTimeout(() => suggestClip(openUrl), 250));
   if (isNative) {
     const { App } = await import('@capacitor/app');
-    App.addListener('backButton', () => { if (!back()) App.exitApp(); });
-    App.addListener('resume', () => { if (tab === 'home' && !stack.length) render(); });
+    App.addListener('backButton', () => { if (document.querySelector('.modal')) { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return; } if (!back()) App.exitApp(); });
+    App.addListener('resume', () => setTimeout(() => suggestClip(openUrl), 400));
   }
   autoChecks().catch(() => {});
 }
