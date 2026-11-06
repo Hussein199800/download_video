@@ -1,5 +1,5 @@
 import './styles.css';
-import { h, ic, $ } from './ui.js';
+import { h, ic, $, watchMore } from './ui.js';
 import { getSettings, migrate } from './store.js';
 import { applyTheme } from './theme.js';
 import { watchLayout } from './layout.js';
@@ -85,6 +85,7 @@ async function boot() {
     h('nav', { class: 'tabbar', 'aria-label': 'التبويبات' }, TABS.map(([id, label, icon, color]) =>
       h('button', { 'data-tab': id, class: color, onclick: () => go(id) }, ic(icon), label, id === 'jobs' && h('i', { class: 'badge', hidden: true })))),
   );
+  watchMore(document.body);
   render();
   await startSync().catch(() => {});
   await startTasks().catch(() => {});

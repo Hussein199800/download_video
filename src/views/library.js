@@ -13,7 +13,7 @@ const MB = 1024 * 1024;
 const LARGE = 100 * MB;
 const PAGE = 60;
 const KINDS = [['all', 'الكل'], ['video', 'فيديو'], ['audio', 'صوت'], ['image', 'صور']];
-const SIZES = [[0, 'أي حجم'], [50 * MB, 'أكبر من 50 م.ب'], [500 * MB, 'أكبر من 500 م.ب'], [1024 * MB, 'أكبر من 1 ج.ب']];
+const SIZES = [[0, 'أي حجم'], [50 * MB, 'أكبر من 50 م.ب'], [LARGE, 'أكبر من 100 م.ب'], [500 * MB, 'أكبر من 500 م.ب'], [1024 * MB, 'أكبر من 1 ج.ب']];
 const SORTS = [['date', 'التاريخ'], ['size', 'الحجم'], ['duration', 'المدة'], ['name', 'الاسم']];
 const SOURCE_NAME = { sayl: 'سَيْل', folder: 'مجلد مختار', device: 'الهاتف' };
 const KIND_ICON = { video: 'video', audio: 'audio', image: 'image' };
@@ -111,7 +111,7 @@ export function libraryView(ctx) {
     const fs = await Media.folders();
     const close = sheet(h('h3', {}, 'مجلداتي'),
       h('p', { class: 'muted' }, 'مجلدات اخترتها بنفسك تظهر ملفاتها في المكتبة. سَيْل يقرأ هذه المجلدات فقط.'),
-      ...fs.map((f) => h('div', { class: 'file-row' }, ic('folder', 'l-ic sm c-green'), h('span', { class: 'l-txt' }, h('b', { class: 'ell', dir: 'auto' }, f.label)),
+      ...fs.map((f) => h('div', { class: 'file-row' }, ic('folder', 'l-ic sm c-green'), h('span', { class: 'l-txt' }, h('b', { class: 'more', dir: 'auto' }, f.label)),
         h('button', { class: 'icon-btn', 'aria-label': `إزالة ${f.label}`, onclick: async () => { await Media.removeFolder(f.uri); close(); refresh(); }, html: ic('x').innerHTML }))),
       h('button', { class: 'btn primary wide', onclick: async () => { try { await Media.addFolder(); close(); if (!st.sources.includes('folder')) { st.sources.push('folder'); persist(); drawSources(); } refresh(); } catch (e) { if (!/لم يُختر/.test(e.message)) toast(e.message, 'bad'); } } }, ic('plus'), 'أضف مجلداً'),
       h('button', { class: 'btn ghost wide', onclick: () => close() }, 'إغلاق'));
@@ -179,8 +179,8 @@ export function libraryView(ctx) {
     th,
     x.kind !== 'image' && h('span', { class: 'lib-dur' }, x.duration ? fmtDur(x.duration / 1000) : ''),
     selecting && h('span', { class: 'lib-check', 'aria-hidden': 'true' }, ic('check')),
-    h('span', { class: 'lib-txt' }, h('b', { class: st.view === 'grid' ? 'ell' : 'clamp2', dir: 'auto' }, x.name), h('small', {}, meta(x)),
-      st.view === 'list' && x.folder ? h('small', { class: 'ell' }, folderText(x)) : null));
+    h('span', { class: 'lib-txt' }, h('b', { class: 'more', dir: 'auto' }, x.name), h('small', {}, meta(x)),
+      st.view === 'list' && x.folder ? h('small', { class: 'more', style: '--lines:1' }, folderText(x)) : null));
     thumbOf(x, el);
     return el;
   }
@@ -308,7 +308,7 @@ export function libraryView(ctx) {
     const act = (icon, label, fn, cls = 'ghost') => h('button', { class: `btn ${cls}`, 'data-act': label, onclick: () => { close(); fn(); } }, ic(icon), label);
     const close = sheet(
       src ? h('img', { class: 'det-thumb', src, alt: '' }) : null,
-      h('h3', { dir: 'auto', class: 'clamp2' }, x.name),
+      h('h3', { dir: 'auto', class: 'wrap' }, x.name),
       h('dl', { class: 'kv' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
       h('div', { class: 'row-btns' }, act('play', 'فتح', () => Media.open(x.uri, x.mime, x.name).catch((e) => toast(e.message, 'bad')), 'primary'), act('share', 'مشاركة', () => Media.share([x.uri]).catch((e) => toast(e.message, 'bad')))),
       x.kind !== 'image' && h('div', { class: 'row-btns' }, act('info', 'التفاصيل التقنية', () => fileInfoSheet(x)), act('tools', 'أدوات', () => toolsFor([x]))),
@@ -408,7 +408,7 @@ function openDuplicates(ctx, items) {
             if (g.every((y) => del.has(y.uri))) toast('حددت كل النسخ؛ لن تبقى أي نسخة', 'bad');
             sync();
           } }),
-          h('span', { class: 'l-txt' }, h('b', { class: 'ell', dir: 'auto' }, x.name), h('small', {}, `${fmtDate(x.date)}${k === 0 ? ' · الأقدم' : ''}`), h('small', { class: 'ell' }, folderText(x)))))));
+          h('span', { class: 'l-txt' }, h('b', { class: 'more', dir: 'auto' }, x.name), h('small', {}, `${fmtDate(x.date)}${k === 0 ? ' · الأقدم' : ''}`), h('small', { class: 'more', style: '--lines:1' }, folderText(x)))))));
       btn.onclick = async () => {
         const yes = await confirmSheet({ title: `حذف ${count(del.size, W.file)}؟`, text: 'تُحذف النسخ المحددة من الهاتف نهائياً. لا يمكن التراجع.', yes: 'حذف', danger: true });
         if (!yes) return;

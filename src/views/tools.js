@@ -66,7 +66,7 @@ function filesBox({ kind, multiple, files, onChange, order = false }) {
     const rows = files.map((f, i) => h('div', { class: 'file-row', 'data-uri': f.uri },
       ic(f.kind === 'audio' ? 'audio' : 'video', `l-ic sm ${f.kind === 'audio' ? 'c-violet' : 'c-sky'}`),
       h('button', { class: 'l-txt plain', onclick: () => fileInfoSheet(f), 'aria-label': `معلومات ${f.name}` },
-        h('b', { class: 'ell', dir: 'auto' }, f.name), h('small', {}, [fmtBytes(f.size), f.meta].filter(Boolean).join(' · ') || '…')),
+        h('b', { class: 'more', dir: 'auto' }, f.name), h('small', {}, [fmtBytes(f.size), f.meta].filter(Boolean).join(' · ') || '…')),
       order && i > 0 && h('button', { class: 'icon-btn', 'aria-label': 'للأعلى', onclick: () => { files.splice(i - 1, 0, files.splice(i, 1)[0]); onChange(files); draw(); }, html: ic('up').innerHTML }),
       order && i < files.length - 1 && h('button', { class: 'icon-btn', 'aria-label': 'للأسفل', onclick: () => { files.splice(i + 1, 0, files.splice(i, 1)[0]); onChange(files); draw(); }, html: ic('down').innerHTML }),
       h('button', { class: 'icon-btn', 'aria-label': `إزالة ${f.name}`, onclick: () => { files.splice(i, 1); onChange(files); draw(); }, html: ic('x').innerHTML })));
@@ -249,7 +249,7 @@ export function openCompress(ctx, preset = []) {
       if (my !== token) return;
       let src = 0, est = 0;
       table.replaceChildren(...plans.map(({ f, p, e }) => {
-        if (e) return h('div', { class: 'plan-row' }, h('b', { class: 'ell', dir: 'auto' }, f.name), h('small', { class: 'err-text' }, e.message));
+        if (e) return h('div', { class: 'plan-row' }, h('b', { class: 'more', dir: 'auto' }, f.name), h('small', { class: 'err-text more' }, e.message));
         f.plan = p;
         const size = p.size || f.size;
         // الذكي يتجاوز المضغوط أصلاً، ولا يُعرض حجم متوقع أكبر من الأصل
@@ -258,7 +258,7 @@ export function openCompress(ctx, preset = []) {
         src += size; est += after;
         const save = size > 0 ? Math.round((1 - after / size) * 100) : 0;
         return h('div', { class: 'plan-row' },
-          h('b', { class: 'ell', dir: 'auto' }, f.name),
+          h('b', { class: 'more', dir: 'auto' }, f.name),
           h('small', {}, `${resName(p.probe.video?.width, p.probe.video?.height) || ''} · ${fmtBytes(size)}${skip || save <= 0 ? '' : ` ← نحو ${fmtBytes(after)}`}`),
           !p.worth && st.level === 'smart' ? h('span', { class: 'tag warn' }, 'مضغوط أصلاً') : h('span', { class: `tag ${save > 0 ? 'ok' : 'warn'}` }, save > 0 ? `−${iso(`${save}%`)}` : 'لن يصغر'));
       }));

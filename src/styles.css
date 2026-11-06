@@ -103,7 +103,11 @@ bdi { unicode-bidi: isolate; }
 .ell { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .url { direction: ltr; unicode-bidi: isolate; text-align: start; }
 /* عنوان يُقص بعد سطرين */
-.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+/* نص طويل يلتف ويُقص بعد --lines سطراً، و«عرض المزيد» يفتحه كاملاً (ui.js: watchMore) */
+.more { display: -webkit-box; -webkit-line-clamp: var(--lines, 2); -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; white-space: normal; }
+.more.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.more-btn { display: inline-flex; align-items: center; justify-self: start; width: max-content; min-height: var(--tap); margin-block: -.7rem -.6rem; color: var(--pri); font-size: var(--fz-xs); font-weight: var(--fw-b); cursor: pointer; }
+.wrap { overflow-wrap: anywhere; white-space: normal; }
 :focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
 
 /* ---------- تدرجات الألوان: لكل نوع لونه ----------
@@ -208,6 +212,7 @@ bdi { unicode-bidi: isolate; }
 .l-txt > * { min-width: 0; overflow-wrap: anywhere; }
 .l-txt b { font-size: var(--fz-md); line-height: 1.6; }
 .l-txt small { color: var(--mute); font-size: var(--fz-sm); line-height: 1.6; }
+.card-acts { display: grid; gap: .375rem; flex: none; }
 .l-go { width: 2rem; height: 2rem; flex: none; padding: .45rem; border-radius: 50%; background: var(--soft); color: var(--pri); }
 
 /* ---------- البطل (رأس الصفحة) ---------- */
@@ -223,7 +228,7 @@ bdi { unicode-bidi: isolate; }
 .thumb { width: 7.5rem; aspect-ratio: 16 / 9; flex: none; border-radius: .875rem; object-fit: cover; background: var(--soft); }
 .thumb.ph { display: grid; place-items: center; color: var(--mute); padding: 1.125rem; }
 .pv-txt { min-width: 0; display: grid; gap: .125rem; }
-.pv-txt b { font-size: var(--fz-md); line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.pv-txt b { font-size: var(--fz-md); line-height: 1.6; }
 .pv-txt small { color: var(--mute); font-size: var(--fz-sm); }
 .opt-label { font-size: var(--fz-sm); color: var(--mute); margin: var(--sp-1) .125rem -.25rem; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: .375rem; padding: .3rem; border-radius: var(--r-md); background: var(--soft); border: 1px solid var(--line); }
@@ -253,7 +258,7 @@ bdi { unicode-bidi: isolate; }
 .job-h { display: flex; gap: .625rem; align-items: center; min-width: 0; }
 .job-ic { width: 2.5rem; height: 2.5rem; flex: none; padding: .55rem; border-radius: .8rem; color: #fff; background: linear-gradient(145deg, var(--g1), var(--g2)); }
 .job-t { flex: 1; min-width: 0; min-height: var(--tap); display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; background: none; border: 0; padding: 0; text-align: start; cursor: pointer; }
-.job-t b { font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-t b { font-size: .88rem; line-height: 1.6; }
 .job-t small { color: var(--mute); font-size: var(--fz-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-acts { display: flex; gap: .375rem; flex-wrap: wrap; }
 .job-err { font-size: var(--fz-sm); line-height: 1.7; color: var(--bad); background: var(--bad-bg); border-radius: var(--r-sm); padding: var(--sp-2) .625rem; overflow-wrap: anywhere; }

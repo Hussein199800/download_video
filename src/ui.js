@@ -65,7 +65,7 @@ export const gcard = ({ color, icon, title, sub, onClick }) =>
 // sub نص أو عنصر جاهز (مثل pathText)؛ clamp يقص العنوان الطويل بعد سطرين
 export const lcard = ({ color, icon, title, sub, onClick, end, clamp }) =>
   h('button', { class: 'lcard', onclick: onClick },
-    ic(icon, `l-ic ${color}`), h('span', { class: 'l-txt' }, h('b', { class: clamp ? 'clamp2' : '', dir: clamp ? 'auto' : null }, title), sub && (sub.nodeType ? sub : h('small', {}, sub))),
+    ic(icon, `l-ic ${color}`), h('span', { class: 'l-txt' }, h('b', { class: clamp ? 'more' : '', dir: clamp ? 'auto' : null }, title), sub && (sub.nodeType ? sub : h('small', {}, sub))),
     end ?? ic('chevL', 'l-go'));
 
 export function seg(options, value, onChange, cls = '') {
@@ -142,7 +142,54 @@ export const urlText = (url, cls = '') => h('bdi', { class: `url ell ${cls}`, di
 // «Download/سيل/قائمة/اسم.mp4» → «التنزيلات ← سيل ← قائمة ← اسم.mp4» كل جزء معزول
 export function pathText(p) {
   const segs = String(p || '').split('/').filter(Boolean).map((x, i) => (i === 0 && x === 'Download' ? 'التنزيلات' : x));
-  return h('small', { class: 'ell', title: p || '' }, segs.map(iso).join(' ← '));
+  return h('small', { class: 'more path', style: '--lines:1', title: p || '' }, segs.map(iso).join(' ← '));
+}
+
+// ---------- «عرض المزيد» للنص الطويل ----------
+// أي عنصر بصنف more يُقص بعد --lines سطراً (2 افتراضياً)، ويظهر بعده «عرض المزيد» فقط إن كان النص أطول فعلاً.
+// يُعاد الفحص عند تغيّر العرض (التدوير وحجم الخط) دون إعادة رسم الصفحة.
+const moreRO = typeof ResizeObserver === 'function' ? new ResizeObserver((es) => es.forEach((e) => syncMore(e.target))) : null;
+
+function toggleMore(e) {
+  e.stopPropagation();
+  e.preventDefault();
+  const el = e.currentTarget.previousElementSibling;
+  el.classList.toggle('open');
+  syncMore(el);
+}
+
+export function syncMore(el) {
+  if (!el.isConnected) return;
+  const open = el.classList.contains('open');
+  let btn = el.nextElementSibling?.classList.contains('more-btn') ? el.nextElementSibling : null;
+  const over = open || el.scrollHeight > el.clientHeight + 1;
+  if (over && !btn) {
+    btn = h('span', { class: 'more-btn', role: 'button', tabindex: 0, onclick: toggleMore,
+      onkeydown: (e) => (e.key === 'Enter' || e.key === ' ') && toggleMore(e),
+      // لا يبدأ الضغط المطوّل أو فتح البطاقة من زر «المزيد»
+      onpointerdown: (e) => e.stopPropagation() });
+    el.after(btn);
+  }
+  if (btn) {
+    btn.hidden = !over;
+    btn.textContent = open ? 'عرض أقل' : 'عرض المزيد';
+    btn.setAttribute('aria-expanded', String(open));
+  }
+}
+
+export function watchMore(root = document.body) {
+  const wire = (el) => {
+    if (el._more) return;
+    el._more = true;
+    moreRO?.observe(el);
+    requestAnimationFrame(() => syncMore(el));
+  };
+  root.querySelectorAll('.more').forEach(wire);
+  new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => {
+    if (n.nodeType !== 1) return;
+    if (n.classList.contains('more')) wire(n);
+    n.querySelectorAll?.('.more').forEach(wire);
+  }))).observe(root, { childList: true, subtree: true });
 }
 
 // نافذة شرح قصيرة: من أين جاء الرقم وكيف حُسب

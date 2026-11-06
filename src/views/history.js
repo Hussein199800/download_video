@@ -23,9 +23,11 @@ export function historyView({ page }) {
     const btn = (icon, label, fn) => h('button', { class: 'icon-btn', 'aria-label': label, onclick: (e) => { e.stopPropagation(); fn(); }, html: ic(icon).innerHTML });
     return h('div', { class: 'lcard', role: 'button', tabindex: 0, onclick: () => Sayl.open(j.id).catch((e) => toast(e.message, 'bad')) },
       ic(j.kind === 'audio' ? 'audio' : 'video', `l-ic ${color}`),
-      h('span', { class: 'l-txt' }, h('b', { class: 'clamp2', dir: 'auto' }, j.title), h('small', {}, `${SITE_NAMES[j.site] || siteOf(j.url).name} · ${fmtDate(j.finishedAt)}`), j.path ? pathText(j.path) : null),
-      btn('share', 'مشاركة', () => Sayl.share(j.id).catch((e) => toast(e.message, 'bad'))),
-      btn('trash', 'حذف', () => remove(j)));
+      h('span', { class: 'l-txt' }, h('b', { class: 'more', dir: 'auto' }, j.title), h('small', {}, `${SITE_NAMES[j.site] || siteOf(j.url).name} · ${fmtDate(j.finishedAt)}`), j.path ? pathText(j.path) : null),
+      // الزران فوق بعضهما ليبقى للعنوان أكبر عرض ممكن
+      h('span', { class: 'card-acts' },
+        btn('share', 'مشاركة', () => Sayl.share(j.id).catch((e) => toast(e.message, 'bad'))),
+        btn('trash', 'حذف', () => remove(j))));
   };
 
   const draw = () => {

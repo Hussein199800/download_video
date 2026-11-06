@@ -208,6 +208,25 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await tabTo(page, 'library');
     await page.tap('#open-history');
     check('سجل التنزيلات بروابط طويلة بلا تمرير أفقي', !(await wide(page)));
+    // «عرض المزيد»: يظهر للنص الطويل فقط، ويفتحه ويغلقه دون أن يفتح البطاقة
+    await page.waitForSelector('.more-btn:not([hidden])');
+    const title = page.locator('.lcard .l-txt b.more').first();
+    const h0 = await title.evaluate((e) => e.getBoundingClientRect().height);
+    await page.locator('.lcard .more-btn:not([hidden])').first().tap();
+    await page.waitForTimeout(150);
+    const h1 = await title.evaluate((e) => e.getBoundingClientRect().height);
+    check('«عرض المزيد» يُظهر النص الطويل كاملاً ملتفاً', h1 > h0 && await title.evaluate((e) => e.classList.contains('open')), `${h0} → ${h1}`);
+    check('زر «عرض المزيد» يصبح «عرض أقل»', /عرض أقل/.test(await page.locator('.lcard .more-btn').first().innerText()));
+    check('«عرض المزيد» لا يفتح البطاقة', await page.locator('.sheet').count() === 0);
+    await page.locator('.lcard .more-btn').first().tap();
+    await page.waitForTimeout(150);
+    check('«عرض أقل» يعيد القص', Math.abs((await title.evaluate((e) => e.getBoundingClientRect().height)) - h0) < 1);
+    check('العنوان القصير بلا «عرض المزيد»', await page.evaluate(() => [...document.querySelectorAll('.more')].filter((e) => e.scrollHeight <= e.clientHeight + 1 && !e.classList.contains('open')).every((e) => !e.nextElementSibling?.classList.contains('more-btn') || e.nextElementSibling.hidden)));
+    await shot(page, { path: path.join(OUT, 'more-text-320.png'), fullPage: true });
+    await tabTo(page, 'jobs');
+    const jb = page.locator('.job .more-btn:not([hidden])').first();
+    if (await jb.count()) { await jb.tap(); await page.waitForTimeout(150); }
+    check('«عرض المزيد» في التنزيلات لا يفتح التفاصيل', await page.locator('.sheet').count() === 0);
     await shot(page, { path: path.join(OUT, 'long-link-history-320.png'), fullPage: true });
     check('لا أخطاء (الفقاعة)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
@@ -345,6 +364,7 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('بعد الإذن تظهر وسائط الهاتف', /VID_20261101/.test(await text(page)));
     await page.tap('#stat-large');
     check('«كبيرة» تعرض الملفات الأكبر من 100 م.ب', /VID_20261101/.test(await page.locator('.lib-item').first().innerText()));
+    check('حقل الحجم يعرض التصفية المطبّقة', await page.locator('#lib-size option:checked').innerText() === 'أكبر من 100 م.ب');
     await shot(page, { path: path.join(OUT, 'library.png'), fullPage: true });
     await page.reload();
     await page.waitForSelector('.tabbar');

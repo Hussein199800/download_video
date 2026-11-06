@@ -64,7 +64,7 @@ function preview(info, url) {
   return h('div', { class: 'card preview' },
     h('div', { class: 'pv-head' },
       info.thumbnail ? h('img', { class: 'thumb', src: info.thumbnail, alt: '', referrerpolicy: 'no-referrer', onerror: (e) => e.target.replaceWith(ic('video', 'thumb ph')) }) : ic('video', 'thumb ph'),
-      h('div', { class: 'pv-txt' }, h('b', { dir: 'auto' }, info.title),
+      h('div', { class: 'pv-txt' }, h('b', { class: 'more', style: '--lines:3', dir: 'auto' }, info.title),
         h('small', {}, [site.name, info.uploader, fmtDur(info.duration)].filter(Boolean).join(' · ')))),
     picker.el, when.el, btn);
 }
