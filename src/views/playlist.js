@@ -1,4 +1,5 @@
 // صفحة قائمة التشغيل: اختيار المقاطع وإعداد واحد للجميع
+import { count, W } from '../text.js';
 import { h, ic, fmtDur } from '../ui.js';
 import { siteOf } from '../links.js';
 import { choicePicker, uid } from './choice.js';
@@ -20,7 +21,9 @@ export function openPlaylist(ctx, info, url) {
       all.textContent = sel.size === avail.length ? 'إلغاء الكل' : 'تحديد الكل';
       list.querySelectorAll('.pl-item input').forEach((c) => { c.checked = sel.has(Number(c.dataset.i)); });
     };
-    const list = h('ul', { class: 'pl-list' }, info.entries.map((e, i) => h('li', { class: `pl-item${e.available ? '' : ' off'}` },
+    // الصف كله هدف لمس: الضغط في أي مكان منه يحدد المقطع أو يلغيه
+    const list = h('ul', { class: 'pl-list' }, info.entries.map((e, i) => h('li', { class: `pl-item${e.available ? '' : ' off'}`,
+      onclick: (ev) => { const c = ev.currentTarget.querySelector('input'); if (ev.target !== c && !c.disabled) { c.checked = !c.checked; c.dispatchEvent(new Event('change')); } } },
       h('input', { type: 'checkbox', 'data-i': String(i), disabled: !e.available, 'aria-label': e.title || 'مقطع',
         onchange: (ev) => { ev.target.checked ? sel.add(i) : sel.delete(i); sync(); } }),
       h('span', { class: 'pl-n' }, String(i + 1)),
@@ -38,7 +41,7 @@ export function openPlaylist(ctx, info, url) {
     };
     page.append(
       h('div', { class: 'hero c-amber' }, ic('playlist', 'h-ic'), h('b', {}, info.title),
-        h('small', {}, `${info.count} مقطع · ${avail.length} متاح للتنزيل. تُحفظ في مجلد باسم القائمة داخل «سيل».`)),
+        h('small', {}, `${count(info.count, W.clip)} · ${avail.length} متاح للتنزيل. تُحفظ في مجلد باسم القائمة داخل «سيل».`)),
       h('div', { class: 'card' }, picker.el, when.el),
       h('div', { class: 'card' }, h('div', { class: 'pl-bar' }, h('b', {}, 'المقاطع'), all), list),
       h('div', { class: 'sticky-act' }, add),

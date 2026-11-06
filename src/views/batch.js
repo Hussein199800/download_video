@@ -1,4 +1,5 @@
 // عدة روابط دفعة واحدة: رابط في كل سطر، وإعداد واحد للجميع
+import { count as cnt, W } from '../text.js';
 import { h, ic } from '../ui.js';
 import { extractUrls, siteOf } from '../links.js';
 import { choicePicker, uid } from './choice.js';
@@ -9,12 +10,12 @@ export function openBatch(ctx) {
   ctx.open({ title: 'عدة روابط', render: ({ page, go }) => {
     const picker = choicePicker({});
     const when = whenPicker();
-    const count = h('span', { class: 'tag' }, '0 رابط');
+    const count = h('span', { class: 'tag' }, cnt(0, W.link));
     const add = h('button', { id: 'batch-add', class: 'btn primary wide', disabled: true }, ic('download'), 'أضف إلى الطابور');
     const area = h('textarea', { id: 'batch-text', class: 'search batch-in', rows: 7, dir: 'ltr', placeholder: 'https://…\nhttps://…' });
     const sync = () => {
       const n = extractUrls(area.value).length;
-      count.textContent = `${n} رابط`;
+      count.textContent = cnt(n, W.link);
       add.disabled = !n;
       add.replaceChildren(ic('download'), n ? `أضف ${n} إلى الطابور` : 'أضف إلى الطابور');
     };

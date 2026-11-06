@@ -1,4 +1,5 @@
 // حالات واتساب وواتساب أعمال: عرض ما شاهدته وحفظه في Download/سيل/حالات واتساب
+import { count, W } from '../text.js';
 import { h, ic, toast, fmtDur } from '../ui.js';
 import { Statuses } from '../native.js';
 
@@ -48,7 +49,7 @@ export function openStatuses(ctx) {
         if (!names.length) return;
         try {
           await Statuses.save(app, names);
-          toast(names.length > 1 ? `حُفظت ${names.length} حالات` : 'حُفظت الحالة', 'ok');
+          toast(names.length > 1 ? `حُفظت ${count(names.length, W.status)}` : 'حُفظت الحالة', 'ok');
           grid(await Statuses.list(app));
         } catch (e) { toast(e.message, 'bad'); }
       };
@@ -69,7 +70,7 @@ export function openStatuses(ctx) {
         return cell;
       });
       body.replaceChildren(
-        h('div', { class: 'st-bar' }, h('span', { class: 'muted' }, `${items.length} حالة`),
+        h('div', { class: 'st-bar' }, h('span', { class: 'muted' }, count(items.length, W.status)),
           h('div', { class: 'st-acts' }, save, h('button', { id: 'st-all', class: 'btn ghost', onclick: () => doSave(items.filter((i) => !i.saved).map((i) => i.name)) }, 'احفظ الكل'))),
         h('div', { class: 'st-grid' }, cells));
       sync();

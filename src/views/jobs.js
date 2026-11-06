@@ -1,5 +1,8 @@
 // التنزيلات: الطابور الحالي مع التقدم، والفاشل والملغى مع إعادة المحاولة
-import { h, ic, toast, fmtBytes, progressLine } from '../ui.js';
+import { h, ic, toast, fmtBytes, progressLine, pct, explain } from '../ui.js';
+import { count, W } from '../text.js';
+import { allTasks, onTasks, startTasks } from '../tasks.js';
+import { processSection } from './process.js';
 import { Sayl } from '../native.js';
 import { classifyError } from '../errors.js';
 import { activeJobs, onJobs, refreshJobs, forget } from '../state.js';
@@ -20,7 +23,7 @@ function jobCard(j) {
   const pending = ['queued', 'waiting_network', 'retrying'].includes(j.state);
   const running = j.state === 'running' && j.pct > 0;
   const meta = j.state === 'running'
-    ? [progressLine(j), running ? `${Math.floor(j.pct)}%` : '']
+    ? [progressLine(j), running ? pct(Math.floor(j.pct)) : '']
     : j.state === 'queued' ? [scheduleLabel(j) || 'ينتظر دوره']
       : j.state === 'retrying' ? [retryLabel(j, Date.now(), getSettings().retries)]
       : j.state === 'waiting_network' ? ['ينتظر عودة الإنترنت ثم يكمل وحده']
@@ -28,7 +31,8 @@ function jobCard(j) {
   const err = j.state === 'failed' && classifyError(j.error);
   return h('div', { class: `job ${color}`, 'data-id': j.id },
     h('div', { class: 'job-h' }, ic(j.kind === 'audio' ? 'audio' : 'video', 'job-ic'),
-      h('button', { class: 'job-t', onclick: () => showDetails(j) }, h('b', {}, j.title || j.url), h('small', {}, [j.engine === 2 ? 'سيرفر 2' : '', j.folder ? `📁 ${j.folder}` : j.url].filter(Boolean).join(' · '))),
+      h('button', { class: 'job-t', onclick: () => showDetails(j) }, h('b', { dir: j.title && j.title !== j.url ? 'auto' : 'ltr' }, j.title || j.url),
+        h('small', { dir: j.folder ? 'auto' : 'ltr' }, [j.engine === 2 ? 'سيرفر 2' : '', j.folder ? `📁 ${j.folder}` : String(j.url).replace(/^https?:\/\/(www\.)?/, '')].filter(Boolean).join(' · '))),
       h('span', { class: `tag ${cls}` }, label)),
     (j.state === 'running' || pending) && h('div', { class: `bar${running ? '' : ' wait'}` }, h('i', { style: `width:${running ? j.pct : 30}%` })),
     j.state === 'paused' && j.pct > 0 && h('div', { class: 'bar paused' }, h('i', { style: `width:${j.pct}%` })),
@@ -50,6 +54,8 @@ function jobCard(j) {
 export function jobsView({ page, go }) {
   const box = h('div', { class: 'jobs' });
   const head = h('div');
+  const proc = h('div');
+  const drawProc = () => proc.replaceChildren(...[processSection(allTasks())].filter(Boolean));
   const draw = () => {
     const list = activeJobs();
     const finished = list.filter((j) => j.state === 'failed' || j.state === 'canceled').length;
@@ -58,15 +64,21 @@ export function jobsView({ page, go }) {
     const speed = running.reduce((n, j) => n + (j.speed || 0), 0);
     head.replaceChildren(
       list.length ? h('div', { class: 'stats' },
-        h('div', { class: 'stat c-sky' }, h('small', {}, 'السرعة الآن'), h('b', {}, speed ? `${fmtBytes(speed)}/ث` : '—')),
-        h('div', { class: 'stat c-green' }, h('small', {}, 'يُنزَّل'), h('b', {}, String(running.length))),
-        h('div', { class: 'stat c-amber' }, h('small', {}, 'في الطابور'), h('b', {}, String(Math.max(0, waiting))))) : '',
-      finished ? h('div', { class: 'card-h' }, h('span', { class: 'muted' }, `${finished} فاشلة أو ملغاة`),
+        h('button', { class: 'stat c-sky', type: 'button', id: 'stat-speed', onclick: () => explain('السرعة الآن', 'مجموع سرعات التنزيلات الجارية في هذه اللحظة، كما يقيسها مكوّن التنزيل كل نصف ثانية. تتغير مع الشبكة وعدد التنزيلات المتزامنة.') },
+          h('small', {}, 'السرعة الآن', ic('info')), h('b', {}, speed ? `${fmtBytes(speed)}/ث` : '—')),
+        h('button', { class: 'stat c-green', type: 'button', onclick: () => explain('يُنزَّل', 'عدد الملفات التي تُنزَّل الآن. الحد الأقصى من الإعدادات ← التنزيلات المتزامنة.') },
+          h('small', {}, 'يُنزَّل', ic('info')), h('b', {}, String(running.length))),
+        h('button', { class: 'stat c-amber', type: 'button', onclick: () => explain('في الطابور', 'الملفات التي تنتظر دورها، ومنها المجدول والمنتظر للواي فاي أو لعودة الإنترنت. تبدأ وحدها عند فراغ مكان.') },
+          h('small', {}, 'في الطابور', ic('info')), h('b', {}, String(Math.max(0, waiting))))) : '',
+      finished ? h('div', { class: 'card-h' }, h('span', { class: 'muted' }, count(finished, ['تنزيل واحد فاشل أو ملغى', 'تنزيلان فاشلان أو ملغيان', 'تنزيلات فاشلة أو ملغاة', 'تنزيلاً فاشلاً أو ملغى'])),
         h('button', { class: 'link', onclick: async () => { await Sayl.clearFinished(); await refreshJobs(); } }, 'مسحها')) : '');
     box.replaceChildren(...(list.length ? list.map(jobCard) : [h('div', { class: 'card empty' }, ic('download'),
       h('div', {}, 'لا توجد تنزيلات جارية.'), h('button', { class: 'btn primary', onclick: () => go('home') }, 'ابدأ تنزيلاً'))]));
   };
-  page.append(h('div', { class: 'intro' }, h('h2', {}, 'التنزيلات'), h('p', {}, 'تستمر في الخلفية حتى لو أغلقت التطبيق، ويظهر تقدمها في الإشعارات.')), head, box);
+  page.append(h('div', { class: 'intro' }, h('h2', {}, 'التنزيلات'), h('p', {}, 'تستمر في الخلفية حتى لو أغلقت التطبيق، ويظهر تقدمها في الإشعارات.')), proc, head, box);
   draw();
-  return onJobs(draw);
+  drawProc();
+  startTasks().catch(() => {});
+  const a = onJobs(draw), b = onTasks(drawProc);
+  return () => { a(); b(); };
 }

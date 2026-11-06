@@ -145,10 +145,15 @@ export function pathText(p) {
   return h('small', { class: 'ell', title: p || '' }, segs.map(iso).join(' ← '));
 }
 
-// زر ⓘ يشرح من أين جاء الرقم وكيف حُسب
+// نافذة شرح قصيرة: من أين جاء الرقم وكيف حُسب
+export function explain(title, text) {
+  const close = sheet(h('h3', {}, title), h('p', { class: 'muted' }, text), h('button', { class: 'btn ghost wide', onclick: () => close() }, 'فهمت'));
+  return close;
+}
+
+// زر ⓘ بجانب رقم أو عنوان
 export const infoBtn = (title, text) => h('button', { class: 'info-btn', type: 'button', 'aria-label': `شرح: ${title}`,
-  onclick: (e) => { e.stopPropagation(); const close = sheet(h('h3', {}, title), h('p', { class: 'muted' }, text), h('button', { class: 'btn ghost wide', onclick: () => close() }, 'فهمت')); },
-  html: icons.info });
+  onclick: (e) => { e.stopPropagation(); explain(title, text); }, html: icons.info });
 
 // علامة «محفوظ ✓» تظهر لحظة بجانب الإعداد بعد حفظه
 export function savedMark() {

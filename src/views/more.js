@@ -1,6 +1,7 @@
 // المزيد: الإعدادات، ومكوّن التنزيل، وcookies، والتشخيص، والتحديثات، وحول التطبيق
-import { h, ic, toast, sheet, lcard, chips, switchRow, fmtDate, fmtBytes } from '../ui.js';
-import { Sayl, AppUpdater, isNative } from '../native.js';
+import { h, ic, toast, sheet, lcard, chips, switchRow, fmtDate, fmtBytes, savedMark } from '../ui.js';
+import { Sayl, AppUpdater, Media, Clip, isNative } from '../native.js';
+import { count, W } from '../text.js';
 import { getSettings, setSettings, getMeta, setMeta } from '../store.js';
 import { applyTheme } from '../theme.js';
 import { readLog, clearLog, logError } from '../state.js';
@@ -90,47 +91,82 @@ export function syncNative() {
 // نافذة التنزيل: الطابور لا يعمل إلا بين وقتين (مثلاً باقة ليلية)
 function windowRow(s, set) {
   const w = { ...s.window };
-  const save = () => { set({ window: { ...w } }); syncNative(); };
+  const mark = savedMark();
+  const save = () => { set({ window: { ...w } }); syncNative(); mark.flash(); };
   const times = h('div', { class: 'row-btns', hidden: !w.on },
     h('label', { class: 'time-lbl' }, 'من', h('input', { type: 'time', class: 'time-in', value: w.from, onchange: (e) => { w.from = e.target.value; save(); } })),
     h('label', { class: 'time-lbl' }, 'إلى', h('input', { type: 'time', class: 'time-in', value: w.to, onchange: (e) => { w.to = e.target.value; save(); } })));
-  return h('div', { class: 'set-col' },
-    switchRow('نافذة التنزيل', 'لا يبدأ الطابور إلا بين وقتين، مثلاً لباقة الإنترنت الليلية. «ابدأ الآن» يتجاوزها.', w.on, (v) => { w.on = v; times.hidden = !v; save(); }),
-    times);
+  const row = switchRow('نافذة التنزيل', 'لا يبدأ الطابور إلا بين وقتين، مثلاً لباقة الإنترنت الليلية. «ابدأ الآن» يتجاوزها.', w.on, (v) => { w.on = v; times.hidden = !v; save(); });
+  row.firstChild.firstChild.after(mark);
+  return h('div', { class: 'set-col' }, row, times);
 }
 
 // ---------- الصفحات الفرعية ----------
+// إعداد بعنوان وسطر شرح وعلامة «محفوظ ✓» تظهر لحظة بعد كل تغيير
+function setting(title, hint, ...controls) {
+  const mark = savedMark();
+  const el = h('div', { class: 'set-col' }, h('b', {}, title, mark), hint && h('small', {}, hint), ...controls);
+  el.saved = mark.flash;
+  return el;
+}
+
 function settingsPage({ page }) {
   const s = getSettings();
-  const set = (patch) => { const n = setSettings(patch); if ('theme' in patch || 'fontScale' in patch) applyTheme(); return n; };
-  const themes = h('div', { class: 'theme-opts' }, [['auto', 'تلقائي', 'auto'], ['light', 'نهاري', 'sun'], ['dark', 'ليلي', 'moon']].map(([v, l, i]) =>
-    h('button', { class: `theme-opt${s.theme === v ? ' on' : ''}`, 'data-v': v, onclick: (e) => {
-      set({ theme: v });
-      themes.querySelectorAll('.theme-opt').forEach((b) => b.classList.toggle('on', b === e.currentTarget));
+  const set = (patch, row) => { const n = setSettings(patch); if ('theme' in patch || 'fontScale' in patch) applyTheme(); row?.saved?.(); return n; };
+  let themeRow, fontRow, videoRow, audioRow, parRow, connRow, retryRow;
+  const themes = h('div', { class: 'theme-opts', role: 'radiogroup', 'aria-label': 'الثيم' }, [['auto', 'تلقائي', 'auto'], ['light', 'نهاري', 'sun'], ['dark', 'ليلي', 'moon']].map(([v, l, i]) =>
+    h('button', { class: `theme-opt${s.theme === v ? ' on' : ''}`, role: 'radio', 'aria-checked': String(s.theme === v), 'data-v': v, onclick: (e) => {
+      set({ theme: v }, themeRow);
+      themes.querySelectorAll('.theme-opt').forEach((b) => { b.classList.toggle('on', b === e.currentTarget); b.setAttribute('aria-checked', String(b === e.currentTarget)); });
     } }, ic(i), l)));
+  const sw = (label, hint, key, after) => {
+    const mark = savedMark();
+    const row = switchRow(label, hint, s[key], (v) => { set({ [key]: v }); mark.flash(); after?.(v); });
+    row.firstChild.firstChild.after(mark);
+    return row;
+  };
+  const outLbl = h('b', { class: 'ltr', id: 'out-dir' }, '…');
+  const outReset = h('button', { class: 'btn sm ghost', id: 'out-reset', hidden: true }, 'الافتراضي');
+  let outRow;
+  const showOut = (r) => { outLbl.textContent = r.label; outReset.hidden = !r.custom; };
+  Media.outDir().then(showOut).catch(() => {});
+  outReset.onclick = async () => { showOut(await Media.resetOutDir()); outRow.saved(); };
+  const tileBtn = h('button', { class: 'btn sm ghost', id: 'add-tile', onclick: async () => {
+    const r = await Sayl.requestTile().catch(() => 'unsupported');
+    toast({ added: 'أُضيفت البلاطة إلى الإعدادات السريعة', exists: 'البلاطة مضافة مسبقاً', denied: 'لم تُضف البلاطة' }[r] || 'اسحب الإعدادات السريعة ← تعديل ← واسحب «نزّل المنسوخ»', r === 'added' || r === 'exists' ? 'ok' : '');
+  } }, ic('plus'), 'أضف البلاطة');
   page.append(
     h('h3', { class: 'sec-h' }, 'المظهر'),
     h('div', { class: 'card form' },
-      h('div', { class: 'set-col' }, h('b', {}, 'الثيم'), h('small', {}, '«تلقائي» يتبع وضع الهاتف النهاري أو الليلي.'), themes),
-      h('div', { class: 'set-col' }, h('b', {}, 'حجم الخط'),
-        chips([{ value: 0.9, label: 'صغير' }, { value: 1, label: 'عادي' }, { value: 1.15, label: 'كبير' }, { value: 1.3, label: 'أكبر' }], s.fontScale, (v) => set({ fontScale: v })))),
+      themeRow = setting('الثيم', '«تلقائي» يتبع وضع الهاتف النهاري أو الليلي.', themes),
+      fontRow = setting('حجم الخط', 'يكبّر كل النصوص والأزرار والمسافات بالنسبة نفسها.',
+        chips([{ value: 0.9, label: 'صغير' }, { value: 1, label: 'عادي' }, { value: 1.15, label: 'كبير' }, { value: 1.3, label: 'أكبر' }], s.fontScale, (v) => set({ fontScale: v }, fontRow)))),
     h('h3', { class: 'sec-h' }, 'التنزيل'),
     h('div', { class: 'card form' },
-      h('div', { class: 'set-col' }, h('b', {}, 'دقة الفيديو المفضلة'), h('small', {}, 'تُختار تلقائياً في المعاينة، ويمكن تغييرها لكل تنزيل.'),
-        chips([{ value: 'best', label: 'أفضل' }, ...[2160, 1080, 720, 480, 360].map((x) => ({ value: x, label: x === 2160 ? '4K' : `${x}p` }))], s.video, (v) => set({ video: v }), 'c-sky')),
-      h('div', { class: 'set-col' }, h('b', {}, 'صيغة الصوت المفضلة'), h('small', {}, 'MP3 يعمل في كل مكان، وM4A هو الصوت الأصلي دون تحويل.'),
-        chips([{ value: 'mp3', label: 'MP3' }, { value: 'm4a', label: 'M4A' }], s.audio, (v) => set({ audio: v }), 'c-violet'),
-        chips([128, 192, 320].map((k) => ({ value: k, label: `${k} ك.ب/ث` })), s.kbps, (v) => set({ kbps: v }), 'c-violet')),
-      h('div', { class: 'set-col' }, h('b', {}, 'التنزيلات المتزامنة'), h('small', {}, 'عدد الملفات التي تُنزَّل معاً. واحد أنسب لقوائم التشغيل الطويلة والإنترنت الضعيف.'),
-        chips([1, 2, 3].map((n) => ({ value: n, label: String(n) })), s.parallel, (v) => { set({ parallel: v }); syncNative(); })),
-      h('div', { class: 'set-col' }, h('b', {}, 'عدد الاتصالات'), h('small', {}, 'كم جزءاً يُنزَّل من الملف في الوقت نفسه. 4 مناسب لأغلب الشبكات، و8 للإنترنت السريع.'),
-        chips([2, 4, 8].map((n) => ({ value: n, label: String(n) })), s.connections, (v) => set({ connections: v }), 'c-sky')),
-      switchRow('محرّك aria2c', 'أسرع في المواقع العادية، وقد يبطئ يوتيوب لأنه يخنق الاتصالات الكثيرة. اتركه مطفأً إن لم تحتجه.', s.aria2, (v) => set({ aria2: v })),
-      h('div', { class: 'set-col' }, h('b', {}, 'إعادة المحاولة تلقائياً'), h('small', {}, 'عند فشل مؤقت يعيد سَيْل المحاولة وحده بعد 30 ثانية ثم دقيقتين ثم 10 دقائق، ويكمل من حيث توقف. انقطاع الإنترنت لا يُحسب محاولة.'),
-        chips([{ value: 0, label: 'بلا' }, ...[3, 5, 10].map((n) => ({ value: n, label: `${n} مرات` }))], s.retries, (v) => { set({ retries: v }); syncNative(); })),
+      videoRow = setting('دقة الفيديو المفضلة', 'تُختار تلقائياً في المعاينة، ويمكن تغييرها لكل تنزيل.',
+        chips([{ value: 'best', label: 'أفضل' }, ...[2160, 1080, 720, 480, 360].map((x) => ({ value: x, label: x === 2160 ? '4K' : `${x}p` }))], s.video, (v) => set({ video: v }, videoRow), 'c-sky')),
+      audioRow = setting('صيغة الصوت المفضلة', 'MP3 يعمل في كل مكان، وM4A هو الصوت الأصلي دون تحويل.',
+        chips([{ value: 'mp3', label: 'MP3' }, { value: 'm4a', label: 'M4A' }], s.audio, (v) => set({ audio: v }, audioRow), 'c-violet'),
+        chips([128, 192, 320].map((k) => ({ value: k, label: `${k} ك.ب/ث` })), s.kbps, (v) => set({ kbps: v }, audioRow), 'c-violet')),
+      parRow = setting('التنزيلات المتزامنة', 'عدد الملفات التي تُنزَّل معاً. واحد أنسب لقوائم التشغيل الطويلة والإنترنت الضعيف.',
+        chips([1, 2, 3].map((n) => ({ value: n, label: String(n) })), s.parallel, (v) => { set({ parallel: v }, parRow); syncNative(); })),
+      connRow = setting('عدد الاتصالات', 'كم جزءاً يُنزَّل من الملف في الوقت نفسه. 4 مناسب لأغلب الشبكات، و8 للإنترنت السريع.',
+        chips([2, 4, 8].map((n) => ({ value: n, label: String(n) })), s.connections, (v) => set({ connections: v }, connRow), 'c-sky')),
+      sw('محرّك aria2c', 'أسرع في المواقع العادية، وقد يبطئ يوتيوب لأنه يخنق الاتصالات الكثيرة. اتركه مطفأً إن لم تحتجه.', 'aria2'),
+      retryRow = setting('إعادة المحاولة تلقائياً', 'عند فشل مؤقت يعيد سَيْل المحاولة وحده بعد 30 ثانية ثم دقيقتين ثم 10 دقائق، ويكمل من حيث توقف. انقطاع الإنترنت لا يُحسب محاولة.',
+        chips([{ value: 0, label: 'بلا' }, ...[3, 5, 10].map((n) => ({ value: n, label: count(n, W.time) }))], s.retries, (v) => { set({ retries: v }, retryRow); syncNative(); })),
       windowRow(s, set),
-      switchRow('اقتراح الرابط المنسوخ', 'عند فتح التطبيق يُعرض الرابط الموجود في الحافظة لتنزيله بضغطة.', s.clipboard, (v) => set({ clipboard: v })),
       h('div', { class: 'set-row' }, h('span', {}, 'مكان الحفظ', h('small', {}, 'مجلد التنزيلات في الهاتف، ولكل قائمة تشغيل مجلد باسمها.')), h('b', { class: 'ltr' }, 'Download/سيل'))),
+    h('h3', { class: 'sec-h' }, 'الرابط المنسوخ'),
+    h('div', { class: 'card form' },
+      sw('اقتراح الرابط المنسوخ', 'عند فتح سَيْل أو العودة إليه تظهر فقاعة صغيرة بالرابط الموجود في الحافظة لتنزيله بلمسة. أندرويد لا يسمح بقراءة الحافظة والتطبيق في الخلفية.', 'clipboard'),
+      h('div', { class: 'set-row' }, h('span', {}, 'بلاطة «نزّل المنسوخ»', h('small', {}, 'في الإعدادات السريعة: انسخ الرابط من أي تطبيق ثم اسحب الشريط واضغطها، فيفتح سَيْل الرابط مباشرة. وأيضاً بالضغط المطوّل على أيقونة سَيْل.')), tileBtn)),
+    h('h3', { class: 'sec-h' }, 'أدوات الوسائط'),
+    h('div', { class: 'card form' },
+      outRow = setting('مكان الملفات الناتجة', 'التحويل والضغط والقص والدمج تحفظ ملفاً جديداً هنا، ولا تستبدل الأصل أبداً.',
+        h('div', { class: 'out-row' }, outLbl, h('span', { class: 'row-gap' }, outReset, h('button', { class: 'btn sm primary', id: 'out-choose', onclick: async () => {
+          try { showOut(await Media.chooseOutDir()); outRow.saved(); } catch (e) { if (!/لم يُختر/.test(e.message)) toast(e.message, 'bad'); }
+        } }, ic('folder'), 'اختر مجلداً'))))),
   );
 }
 
@@ -197,7 +233,7 @@ function logPage({ page }) {
     list.length ? h('div', { class: 'card' }, h('div', { class: 'log' }, textOf())) : h('div', { class: 'card empty' }, ic('check'), 'لا أخطاء مسجلة.'),
     list.length ? h('div', { class: 'row-btns' },
       h('button', { class: 'btn primary', onclick: async () => {
-        try { const { Clipboard } = await import('@capacitor/clipboard'); await Clipboard.write({ string: textOf() }); toast('نُسخ السجل', 'ok'); } catch { toast('تعذّر النسخ', 'bad'); }
+        try { await Clip.write(textOf()); toast('نُسخ السجل', 'ok'); } catch { toast('تعذّر النسخ', 'bad'); }
       } }, ic('copy'), 'نسخ'),
       h('button', { class: 'btn danger', onclick: () => { clearLog(); toast('مُسح السجل'); page.replaceChildren(); logPage({ page }); } }, 'مسح')) : null,
   ].filter(Boolean));

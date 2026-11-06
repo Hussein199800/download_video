@@ -5,10 +5,11 @@ import { applyTheme } from './theme.js';
 import { watchLayout } from './layout.js';
 import { suggestClip, hideBubble } from './clip.js';
 import { startSync, onJobs, activeJobs } from './state.js';
+import { startTasks, onTasks, activeTasks } from './tasks.js';
 import { Sayl, isNative } from './native.js';
 import { homeView, handleSharedText } from './views/home.js';
 import { jobsView } from './views/jobs.js';
-import { historyView } from './views/history.js';
+import { libraryView } from './views/library.js';
 import { guideView } from './views/guide.js';
 import { moreView, autoChecks, syncNative } from './views/more.js';
 
@@ -16,11 +17,11 @@ import { moreView, autoChecks, syncNative } from './views/more.js';
 const TABS = [
   ['home', 'الرئيسية', 'home', 'c-indigo'],
   ['jobs', 'التنزيلات', 'download', 'c-sky'],
-  ['history', 'السجل', 'history', 'c-green'],
+  ['library', 'المكتبة', 'grid', 'c-green'],
   ['guide', 'الشرح', 'book', 'c-amber'],
   ['more', 'المزيد', 'more', 'c-violet'],
 ];
-const VIEWS = { home: homeView, jobs: jobsView, history: historyView, guide: guideView, more: moreView };
+const VIEWS = { home: homeView, jobs: jobsView, library: libraryView, guide: guideView, more: moreView };
 
 let tab = 'home';
 let stack = [];   // الصفحات الفرعية فوق التبويب الحالي
@@ -66,7 +67,7 @@ export function back() {
 }
 
 function badge() {
-  const n = activeJobs().filter((j) => j.state === 'queued' || j.state === 'running').length;
+  const n = activeJobs().filter((j) => j.state === 'queued' || j.state === 'running').length + activeTasks().length;
   const b = document.querySelector('.tabbar [data-tab="jobs"] .badge');
   b.textContent = n || '';
   b.hidden = !n;
@@ -86,7 +87,9 @@ async function boot() {
   );
   render();
   await startSync().catch(() => {});
+  await startTasks().catch(() => {});
   onJobs(badge);
+  onTasks(badge);
   badge();
   syncNative();
   // المشاركة من تطبيق آخر، أو «نزّل المنسوخ» من البلاطة والاختصار: عند الفتح وأثناء العمل

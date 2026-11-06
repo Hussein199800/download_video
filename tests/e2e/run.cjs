@@ -31,8 +31,8 @@ function check(name, cond, info = '') {
   if (!cond) failures++;
 }
 
-async function newPage(browser, base, { scheme = 'dark', storage = {}, viewport = { width: 390, height: 844 } } = {}) {
-  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, colorScheme: scheme });
+async function newPage(browser, base, { scheme = 'dark', storage = {}, viewport = { width: 390, height: 844 }, touch = false } = {}) {
+  const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, colorScheme: scheme, hasTouch: touch });
   await ctx.route('https://api.github.com/**', (r) => r.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ tag_name: 'v' + VER, body: '', assets: [] }) }));
   await ctx.addInitScript((s) => { for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v); }, storage);
@@ -47,7 +47,8 @@ async function newPage(browser, base, { scheme = 'dark', storage = {}, viewport 
 
 // انتظار انتهاء حركة دخول الصفحة قبل التصوير
 const shot = async (page, opts) => { await page.waitForTimeout(400); await page.screenshot(opts); };
-const text = (page) => page.evaluate(() => document.body.innerText);
+// النص كما يقرؤه المستخدم: دون محارف العزل الاتجاهي غير المرئية
+const text = (page) => page.evaluate(() => document.body.innerText.replace(/[\u2066-\u2069]/g, ''));
 
 async function main() {
   await new Promise((r) => server.listen(0, r));
@@ -73,8 +74,9 @@ async function main() {
     await page.click('.tabbar [data-tab="jobs"]');
     check('المهمة في التنزيلات', /مقطع تجريبي/.test(await text(page)));
     await page.waitForTimeout(1200);
-    await page.click('.tabbar [data-tab="history"]');
-    check('بعد الاكتمال تظهر في السجل', /مقطع تجريبي/.test(await text(page)));
+    await page.click('.tabbar [data-tab="library"]');
+    await page.click('#open-history');
+    check('بعد الاكتمال تظهر في سجل التنزيلات', /مقطع تجريبي/.test(await text(page)));
     await shot(page, { path: path.join(OUT, 'history.png') });
 
     // تكرار الرابط نفسه أثناء التنزيل لا يُضاف مرتين
@@ -268,6 +270,9 @@ async function main() {
     check('لا تمرير أفقي على شاشة 340px', !overflow);
     await shot(page, { path: path.join(OUT, 'guide-small.png') });
     await page.context().close();
+
+    // ---------- مراجعة جودة الواجهة: المقاسات والتدوير واللمس والتباين والأدوات والمكتبة ----------
+    await require('./audit.cjs')({ browser, base, newPage, check, shot, text, OUT });
   } finally {
     await browser.close();
     server.close();

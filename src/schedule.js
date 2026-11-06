@@ -1,4 +1,5 @@
 // الجدولة في الواجهة: حساب الوقت المختار وعناوين المهام المجدولة والمؤجلة
+import { LOCALE } from './text.js';
 import { fmtDur } from './ui.js';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -15,7 +16,7 @@ export function nextAt(hhmm, now = Date.now()) {
 function dayWord(t, now) {
   const a = new Date(now); a.setHours(0, 0, 0, 0);
   const days = Math.round((new Date(t).setHours(0, 0, 0, 0) - a.getTime()) / 864e5);
-  return days === 0 ? 'اليوم' : days === 1 ? 'غداً' : new Date(t).toLocaleDateString('ar', { weekday: 'long' });
+  return days === 0 ? 'اليوم' : days === 1 ? 'غداً' : new Date(t).toLocaleDateString(LOCALE, { weekday: 'long' });
 }
 
 export function scheduleLabel(j, now = Date.now()) {

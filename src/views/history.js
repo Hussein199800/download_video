@@ -1,5 +1,6 @@
-// السجل: كل ما اكتمل، مع البحث والفلترة والفتح والمشاركة والحذف
-import { h, ic, toast, sheet, fmtDate } from '../ui.js';
+// سجل التنزيلات (داخل المكتبة): كل ما اكتمل تنزيله، مع الموقع والتاريخ، والبحث والفلترة والفتح والمشاركة والحذف
+import { h, ic, toast, sheet, fmtDate, pathText } from '../ui.js';
+import { matches } from '../text.js';
 import { Sayl } from '../native.js';
 import { siteOf } from '../links.js';
 import { doneJobs, onJobs, forget } from '../state.js';
@@ -20,9 +21,9 @@ export function historyView({ page }) {
   const item = (j) => {
     const color = j.kind === 'audio' ? 'c-violet' : 'c-sky';
     const btn = (icon, label, fn) => h('button', { class: 'icon-btn', 'aria-label': label, onclick: (e) => { e.stopPropagation(); fn(); }, html: ic(icon).innerHTML });
-    return h('div', { class: 'lcard', onclick: () => Sayl.open(j.id).catch((e) => toast(e.message, 'bad')) },
+    return h('div', { class: 'lcard', role: 'button', tabindex: 0, onclick: () => Sayl.open(j.id).catch((e) => toast(e.message, 'bad')) },
       ic(j.kind === 'audio' ? 'audio' : 'video', `l-ic ${color}`),
-      h('span', { class: 'l-txt' }, h('b', {}, j.title), h('small', {}, `${SITE_NAMES[j.site] || siteOf(j.url).name} · ${fmtDate(j.finishedAt)}`), h('small', {}, j.path || '')),
+      h('span', { class: 'l-txt' }, h('b', { class: 'clamp2', dir: 'auto' }, j.title), h('small', {}, `${SITE_NAMES[j.site] || siteOf(j.url).name} · ${fmtDate(j.finishedAt)}`), j.path ? pathText(j.path) : null),
       btn('share', 'مشاركة', () => Sayl.share(j.id).catch((e) => toast(e.message, 'bad'))),
       btn('trash', 'حذف', () => remove(j)));
   };
@@ -33,14 +34,13 @@ export function historyView({ page }) {
     chipsBox.replaceChildren(
       ...[['all', 'الكل'], ['video', 'فيديو'], ['audio', 'صوت']].map(([v, l]) => h('button', { class: f.kind === v && f.site === 'all' ? 'on' : '', onclick: () => { f.kind = v; f.site = 'all'; draw(); } }, l)),
       ...(sites.length > 1 ? sites.map((s) => h('button', { class: f.site === s ? 'on' : '', onclick: () => { f.site = s; f.kind = 'all'; draw(); } }, SITE_NAMES[s] || s)) : []));
-    const q = f.q.trim().toLowerCase();
-    const shown = all.filter((j) => (f.kind === 'all' || j.kind === f.kind) && (f.site === 'all' || (j.site || 'other') === f.site) && (!q || (j.title || '').toLowerCase().includes(q)));
+    const shown = all.filter((j) => (f.kind === 'all' || j.kind === f.kind) && (f.site === 'all' || (j.site || 'other') === f.site) && matches(j.title, f.q));
     list.replaceChildren(...(shown.length ? shown.map(item) : [h('div', { class: 'card empty' }, ic('history'), all.length ? 'لا نتائج مطابقة.' : 'لم تنزّل شيئاً بعد. ما تنزّله يظهر هنا.')]));
   };
 
   page.append(
-    h('div', { class: 'intro' }, h('h2', {}, 'السجل'), h('p', {}, 'الملفات محفوظة في مجلد التنزيلات ← سيل. اضغط على الملف لفتحه.')),
-    h('input', { class: 'search', type: 'search', placeholder: 'ابحث في العناوين…', oninput: (e) => { f.q = e.target.value; draw(); } }),
+    h('p', { class: 'hint' }, 'كل ما نزّلته، مع موقعه وتاريخه. الملفات في مجلد التنزيلات ← سيل. اضغط على الملف لفتحه.'),
+    h('input', { class: 'search', id: 'hist-q', type: 'search', placeholder: 'ابحث في العناوين…', 'aria-label': 'بحث في السجل', oninput: (e) => { f.q = e.target.value; draw(); } }),
     chipsBox, list);
   draw();
   return onJobs(draw);
