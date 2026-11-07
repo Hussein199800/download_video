@@ -6,7 +6,7 @@ import { getSettings, setSettings, getMeta, setMeta } from '../store.js';
 import { applyTheme } from '../theme.js';
 import { readLog, clearLog, logError } from '../state.js';
 import { redact } from '../errors.js';
-import { fetchLatest, isNewer, shouldCheck, RELEASES_PAGE } from '../update.js';
+import { fetchLatest, isNewer, shouldCheck, RELEASES_PAGE, STABLE_APK, plainNotes } from '../update.js';
 import { VERSION } from '../version.js';
 import { CHANGELOG } from '../changelog.js';
 
@@ -43,7 +43,7 @@ function updateSheet(rel) {
   const btn = h('button', { class: 'btn primary wide' }, ic('cloud'), `نزّل الإصدار ${rel.version}${rel.size ? ` (${fmtBytes(rel.size)})` : ''}`);
   const close = sheet(
     h('h3', {}, `إصدار جديد: ${rel.version}`),
-    rel.notes && h('p', { class: 'muted', style: 'white-space:pre-line' }, rel.notes),
+    rel.notes && h('p', { class: 'muted', style: 'white-space:pre-line' }, plainNotes(rel.notes)),
     h('div', { class: 'bar c-indigo' }, bar),
     btn,
     h('button', { class: 'btn ghost wide', onclick: () => close() }, 'لاحقاً'));
@@ -60,9 +60,18 @@ function updateSheet(rel) {
       btn.textContent = 'ثبّت التحديث';
       btn.onclick = () => AppUpdater.install().catch((e) => toast(e.message, 'bad'));
     } catch (e) {
-      toast(e.message || 'تعذّر التحديث', 'bad');
       btn.disabled = false;
       btn.textContent = 'أعد المحاولة';
+      // نسخة مثبّتة بمفتاح آخر (تجريبية غالباً): أندرويد يرفض التحديث فوقها، فالحل تثبيت جديد
+      if (/توقيع/.test(e.message || '')) {
+        close();
+        const c2 = sheet(h('h3', {}, 'لا يمكن التحديث فوق هذه النسخة'),
+          h('p', { class: 'muted' }, 'النسخة المثبّتة على هاتفك موقّعة بمفتاح مختلف عن نسخ الإصدار الرسمية (غالباً نسخة تجريبية)، وأندرويد لا يقبل تحديثاً بتوقيع مختلف حمايةً لك.\nالحل مرة واحدة: احذف سَيْل، ثم ثبّت أحدث نسخة من الرابط. ملفاتك في مجلد التنزيلات ← سيل تبقى كما هي، ويُفقد السجل والإعدادات فقط. بعدها تصل التحديثات من داخل التطبيق عادياً.'),
+          h('button', { class: 'btn primary wide', onclick: () => { window.open(STABLE_APK, '_blank'); c2(); } }, ic('download'), 'فتح رابط التحميل'),
+          h('button', { class: 'btn ghost wide', onclick: () => c2() }, 'إغلاق'));
+        return;
+      }
+      toast(e.message || 'تعذّر التحديث', 'bad');
     } finally {
       l?.remove?.();
     }
