@@ -67,20 +67,25 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
             val before = store.get(job.id)
             if (before == null || !mine() || before.state == "canceled") throw Server2.Canceled()
             // Download/سيل/<المنصة>/[قائمة التشغيل]/الملف
-            val saved = Saver.publishIn(applicationContext, file, listOf(Sites.folder(job.site, job.url), job.folder))
+            val segments = listOf(Sites.folder(job.site, job.url), job.folder)
+            val saved = Saver.publishIn(applicationContext, file, segments)
+            // ترجمات SRT طلبها المستخدم ملفاً بجانب الفيديو: «الاسم [المعرّف].ar.srt»
+            val extras = subtitles(work, file, segments)
+                ?: if (SUBS_FAILED.remove(job.id)) org.json.JSONArray().put(org.json.JSONObject().put("failed", true)).toString() else null
             // روابط «عدة روابط» تُضاف بعنوان الرابط نفسه؛ نأخذ العنوان الحقيقي من اسم الملف
             val title = if (job.title == job.url) file.nameWithoutExtension.replace(Regex(" \\[[^\\]]+]$"), "") else job.title
             val now = System.currentTimeMillis()
             // الإيقاف أثناء النسخ بعد اكتمال التنزيل لا معنى له: الملف كامل فيُعدّ مكتملاً. الإلغاء أثناءه يحذف المنشور.
             val after = store.updateRun(job.id, job.run) {
                 if (it.state == "canceled") it
-                else it.copy(state = "done", title = title, pct = 100f, path = saved.path, uri = saved.uri, error = null, speed = 0, finishedAt = now)
+                else it.copy(state = "done", title = title, pct = 100f, path = saved.path, uri = saved.uri, error = null, speed = 0, finishedAt = now, extras = extras)
             }
             if (after == null || after.state != "done") {
                 Saver.delete(applicationContext, saved.uri)
                 after?.let { Bus.emit("state", it) }
                 return
             }
+            chain(after, saved, file.length())
             finish(after)
         } catch (e: Exception) {
             if (!mine()) return
@@ -115,6 +120,11 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
             } catch (e: Exception) {
                 val st = store.get(job.id)?.state
                 if (st == "paused" || st == "canceled") throw e
+                // الموقع رفض الترجمة (يوتيوب يرد 429 أحياناً): المقطع دونها، ويُذكر ذلك في السجل
+                if (SubArgs.has(job.args) && SubArgs.failed(e.message)) {
+                    SUBS_FAILED.add(job.id)
+                    return server1WithFallback(job.copy(args = SubArgs.strip(job.args)), work)
+                }
                 val kind = Failure.classify(e.message)
                 when (ServerPolicy.next(kind, job.url, Bus.lastEngineUpdate(applicationContext), System.currentTimeMillis(), triedUpdate, false)) {
                     ServerPolicy.Step.UPDATE_AND_RETRY -> {
@@ -130,6 +140,44 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
                 }
             }
         }
+    }
+
+    /** ينشر ملفات الترجمة التي كتبها yt-dlp بجانب الفيديو ويعيدها JSON للسجل، أو null */
+    private fun subtitles(work: File, video: File, segments: List<String?>): String? {
+        val base = video.nameWithoutExtension
+        val subs = work.walkTopDown().filter { it.isFile && it.extension.lowercase() == "srt" && it.name.startsWith(base) }.toList()
+        if (subs.isEmpty()) return null
+        val arr = org.json.JSONArray()
+        subs.forEach { f ->
+            runCatching {
+                val lang = f.name.removePrefix(base).removeSuffix(".srt").trim('.')
+                val s = Saver.publishIn(applicationContext, f, segments)
+                arr.put(org.json.JSONObject().put("lang", lang).put("uri", s.uri).put("path", s.path))
+            }
+        }
+        return if (arr.length() > 0) arr.toString() else null
+    }
+
+    /**
+     * خطوات تلقائية بعد التنزيل من choice.after (قص جزء، نسخة للواتساب…) تُضاف إلى طابور المعالجة
+     * بمعرّف ثابت من معرّف التنزيل، فلو أُعيد التنزيل بعد توقف مفاجئ لا تتكرر.
+     */
+    private fun chain(job: Job, saved: Saver.Saved, size: Long) {
+        val steps = runCatching { org.json.JSONObject(job.choice ?: "{}").optJSONArray("after") }.getOrNull() ?: return
+        if (steps.length() == 0) return
+        fun task(i: Int, input: MediaRef?): MediaTask? {
+            val s = steps.optJSONObject(i) ?: return null
+            val params = s.optJSONObject("params") ?: org.json.JSONObject()
+            params.put("saveIn", org.json.JSONArray(listOf(Sites.folder(job.site, job.url), job.folder)))
+            params.put("job", job.id)
+            // الخطوة التالية تعمل على ناتج هذه
+            steps.optJSONObject(i + 1)?.let { params.put("next", it) }
+            return MediaTask(id = "${job.id}-${s.optString("op")}", op = s.optString("op"), title = job.title, inputs = listOfNotNull(input), params = params)
+        }
+        val first = task(0, MediaRef(saved.uri, saved.path.substringAfterLast('/'), size, saved.path, Saver.mime(saved.path))) ?: return
+        val tasks = Bus.tasks(applicationContext)
+        if (tasks.get(first.id) == null) { tasks.add(listOf(first)); Bus.emitTask(first) }
+        MediaWorker.kick(applicationContext)
     }
 
     /**
@@ -246,6 +294,8 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
     }
 
     companion object {
+        /** مهام رفض الموقع ترجمتها في هذه المحاولة (نُزّلت دونها) */
+        private val SUBS_FAILED: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
         private const val WORK = "sayl-queue"
         private const val WAKE = "sayl-wake"
         private const val NOTIF_ID = 7001

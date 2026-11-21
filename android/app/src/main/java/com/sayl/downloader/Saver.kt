@@ -35,6 +35,7 @@ object Saver {
         "jpg", "jpeg" -> "image/jpeg"
         "png" -> "image/png"
         "webp" -> "image/webp"
+        "srt" -> "application/x-subrip"
         "gif" -> "image/gif"
         else -> "application/octet-stream"
     }

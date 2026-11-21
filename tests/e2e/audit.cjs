@@ -192,6 +192,9 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('الفقاعة لا تتجاوز عرض الشاشة مع رابط طويل جداً', bub.x >= 0 && bub.x + bub.width <= 320 && !(await wide(page)), JSON.stringify(bub));
     await shot(page, { path: path.join(OUT, 'clip-bubble-320.png') });
     await page.tap('#clip-go');
+    await page.waitForSelector('.quick-sheet');
+    check('نافذة الطرق برابط طويل على 320 بلا تمرير أفقي', !(await wide(page)));
+    await page.tap('#quick-custom');
     await page.waitForSelector('.preview');
     check('«نزّل» من الفقاعة يقرأ الرابط', await page.inputValue('#url') === LONG);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -543,6 +546,100 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForTimeout(300);
     check('بعد حذف صورة يعرض الألبوم 49', /49 صورة/.test(await page.locator('[data-album]').innerText()));
     check('لا أخطاء (الألبوم)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 10) المرحلتان 6 و7: جزء من المقطع، ونسخة للواتساب، والترجمة ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    await page.fill('#url', 'https://www.youtube.com/watch?v=clip1&title=' + encodeURIComponent('درس القص'));
+    await page.tap('#go');
+    await page.waitForSelector('#extras');
+    check('الخيارات الإضافية مطوية افتراضياً', !(await page.locator('#extras').evaluate((d) => d.open)));
+    await page.tap('#extras summary');
+    const opts = await page.locator('#subs-lang option').allInnerTexts();
+    check('لغات الترجمة: العربية أولاً واليدوية قبل التلقائية', opts[1] === 'العربية' && opts.some((o) => /الإنجليزية · تلقائية/.test(o)) && !opts.some((o) => /الألمانية/.test(o)), opts.join(' | '));
+    await page.locator('label:has(#clip-on)').tap();
+    check('حقلا البداية والنهاية يظهران بمدة المقطع', await page.locator('#clip-end').inputValue() === '4:05');
+    await page.locator('#clip-end').fill('');
+    await page.locator('#clip-end').type('٥:٠٠');
+    check('نهاية بعد آخر المقطع مرفوضة برسالة واضحة', /بعد آخر المقطع \(4:05\)/.test(await page.locator('#clip-err').innerText()));
+    await page.tap('#dl');
+    check('لا يُضاف للطابور بجزء غير صالح', await page.evaluate(() => document.querySelector('.toast')?.textContent || '').then((t) => /بعد آخر المقطع/.test(t)));
+    await page.locator('#clip-start').fill('');
+    await page.locator('#clip-start').type('١:٣٠');
+    await page.locator('#clip-end').fill('');
+    await page.locator('#clip-end').type('٢:٠٥٫٥');
+    check('الأرقام العربية والفاصلة «٫» مقبولة', (await page.locator('#clip-err').innerText()) === '');
+    await page.locator('label:has(#wa-copy)').tap();
+    await page.locator('#subs-lang').selectOption('ar');
+    check('طريقة الترجمة تظهر بعد اختيار اللغة', await page.locator('#subs-mode-box').isVisible());
+    check('لا تمرير أفقي في الخيارات الإضافية', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'extras.png'), fullPage: true });
+    // الصوت: لا ضغط للواتساب ولا ترجمة، والقص متاح
+    await page.locator('.picker .seg button', { hasText: 'صوت' }).tap();
+    check('للصوت: القص فقط', await page.locator('#clip-on').isVisible() && !(await page.locator('#wa-copy').isVisible()) && !(await page.locator('#subs-lang').isVisible()));
+    await page.locator('.picker .seg button', { hasText: 'فيديو' }).tap();
+    await page.tap('#dl');
+    await page.waitForTimeout(3500);
+    await tabTo(page, 'library');
+    await page.waitForSelector('.lib-item');
+    await page.locator('#lib-q').fill('درس القص');
+    await page.waitForTimeout(300);
+    const names = await page.locator('.lib-item').allInnerTexts();
+    const flat = names.join(' | ').replace(/\s+/g, ' ');
+    check('الجزء محفوظ بجانب الأصل والكامل حُذف', /درس القص \(مقطع\)\.mp4/.test(flat) && !names.some((n) => /درس القص\.mp4/.test(n)), flat.slice(0, 300));
+    check('ونسخة الواتساب من الجزء نفسه', /درس القص \(مقطع\) \(مضغوط\)\.mp4/.test(flat));
+    check('كلاهما في مجلد المنصة لا في «معالَج»', !/معالَج/.test(flat), flat.slice(0, 300));
+    await page.locator('.lib-item', { hasText: 'درس القص (مقطع).mp4' }).first().tap();
+    await page.waitForSelector('.sheet .kv');
+    const det = await page.locator('.sheet').innerText();
+    check('التفاصيل: الترجمة العربية ملف SRT بجانبه', /الترجمة[\s\S]*العربية · ملف \u2068?SRT\u2069? بجانبه/.test(det), det.replace(/\s+/g, ' ').slice(0, 300));
+    check('لا أخطاء (الخيارات الإضافية)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 11) المرحلة 5: «احفظ بطريقتي» عند مشاركة رابط ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    await page.evaluate(() => window.__share('شاهد هذا https://www.youtube.com/watch?v=q1&title=' + encodeURIComponent('مشاركة سريعة')));
+    await page.waitForSelector('.quick-sheet');
+    const items = await page.locator('.quick-sheet .lcard').allInnerTexts();
+    check('النافذة تعرض الطرق الثلاث الافتراضية', items.length === 3 && /فيديو 720p \+ نسخة للواتساب/.test(items[1]), items.join(' | '));
+    check('لا تمرير أفقي في نافذة الطرق', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'quick-sheet.png') });
+    await page.tap('#quick-1');
+    await page.waitForTimeout(3500);
+    await tabTo(page, 'library');
+    await page.waitForSelector('.lib-item');
+    await page.locator('#lib-q').fill('مشاركة سريعة');
+    await page.waitForTimeout(300);
+    const flat = (await page.locator('.lib-item').allInnerTexts()).join(' | ').replace(/\s+/g, ' ');
+    check('بلمسة واحدة: الفيديو ونسخته للواتساب', /مشاركة سريعة\.mp4/.test(flat) && /مشاركة سريعة \(مضغوط\)\.mp4/.test(flat), flat.slice(0, 300));
+    // «اختيار مفصّل» يفتح المعاينة دون إضافة
+    await page.evaluate(() => window.__share('https://www.youtube.com/watch?v=q2'));
+    await page.waitForSelector('.quick-sheet');
+    await page.tap('#quick-custom');
+    await page.waitForSelector('#dl');
+    check('«اختيار مفصّل» يعرض المعاينة', await page.locator('#extras').count() === 1);
+    // تعديل الطرق: حذف وإضافة، والإيقاف يذهب للمعاينة مباشرة
+    await tabTo(page, 'more');
+    await tap(page, '#open-settings');
+    await page.locator('#quick-list [data-del="0"]').scrollIntoViewIfNeeded();
+    await page.tap('#quick-list [data-del="0"]');
+    await tap(page, '#quick-add');
+    await page.locator('.sheet .seg button', { hasText: 'صوت' }).tap();
+    await page.locator('.sheet .chips-sel button', { hasText: 'M4A' }).tap();
+    await page.tap('#quick-save');
+    const rows = await page.locator('#quick-list .quick-row').allInnerTexts();
+    check('حذف طريقة وإضافة «صوت M4A»', rows.length === 3 && /صوت M4A/.test(rows[2]) && !rows.some((r) => /أفضل جودة/.test(r)), rows.join(' | '));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sayl.settings')).quick.length);
+    check('الطرق محفوظة', saved === 3);
+    await page.locator('label:has(input.sw)', { hasText: 'اسألني عند مشاركة رابط' }).tap();
+    await page.evaluate(() => window.__share('https://www.youtube.com/watch?v=q3'));
+    await page.waitForSelector('#dl');
+    check('بإيقافها يذهب الرابط إلى المعاينة مباشرة', await page.locator('.quick-sheet').count() === 0);
+    check('لا أخطاء («احفظ بطريقتي»)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
   }
 };

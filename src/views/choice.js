@@ -6,7 +6,7 @@ import { getSettings } from '../store.js';
 const RES = { 2160: '4K', 1440: '1440p', 1080: '1080p', 720: '720p', 480: '480p', 360: '360p' };
 
 // heights: الدقات المتاحة في المقطع (فارغة لقائمة التشغيل = كل الدقات)
-export function choicePicker({ heights = [], type } = {}) {
+export function choicePicker({ heights = [], type, onType } = {}) {
   const s = getSettings();
   const max = heights.length ? heights[0] : Infinity;
   // ما فوق أعلى دقة في المقطع لا معنى له؛ ما دونها يختار yt-dlp أقرب دقة أقل منها
@@ -35,7 +35,7 @@ export function choicePicker({ heights = [], type } = {}) {
   };
   const el = h('div', { class: 'picker' },
     seg([{ value: 'video', label: 'فيديو', icon: 'video' }, { value: 'audio', label: 'صوت', icon: 'audio' }], state.type,
-      (v) => { state.type = v; el.firstChild.className = `seg ${v === 'video' ? 'c-sky' : 'c-violet'}`; draw(); }, state.type === 'video' ? 'c-sky' : 'c-violet'),
+      (v) => { state.type = v; el.firstChild.className = `seg ${v === 'video' ? 'c-sky' : 'c-violet'}`; draw(); onType?.(v); }, state.type === 'video' ? 'c-sky' : 'c-violet'),
     body);
   draw();
   return {

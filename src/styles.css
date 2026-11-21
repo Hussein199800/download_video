@@ -561,3 +561,20 @@ html.two-col .sheet { border-radius: var(--r-xl); margin-bottom: 0; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* خيارات إضافية قبل التنزيل: تُطوى افتراضياً حتى تبقى المعاينة قصيرة */
+details.extras > summary { list-style: none; cursor: pointer; display: grid; gap: var(--sp-1); font-weight: 700; padding-inline-end: 2rem; position: relative; }
+details.extras > summary::-webkit-details-marker { display: none; }
+details.extras > summary small { color: var(--mute); font-weight: 400; font-size: var(--fz-xs); }
+details.extras > summary::after { content: ''; position: absolute; inset-inline-end: .25rem; top: .4rem; width: .55rem; height: .55rem; border: solid var(--mute); border-width: 0 0 2px 2px; transform: rotate(-45deg); transition: transform .2s; }
+details.extras[open] > summary::after { transform: rotate(135deg); }
+details.extras[open] > summary { margin-bottom: var(--sp-2); }
+.clip-box { display: grid; gap: var(--sp-2); padding: 0 0 var(--sp-2); border-bottom: 1px solid var(--line); }
+
+/* «احفظ بطريقتي» */
+.quick-sheet { display: grid; gap: var(--sp-3); }
+.quick-sheet .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-list { display: grid; }
+.quick-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
+.quick-row .l-txt { flex: 1; min-width: 0; display: grid; }
+.quick-row small { color: var(--mute); font-size: var(--fz-xs); }

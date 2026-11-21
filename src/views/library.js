@@ -359,6 +359,10 @@ export function libraryView(ctx) {
     setTimeout(() => { input.focus(); input.select(); }, 50);
   }
 
+  // ملفات الترجمة المحفوظة بجانب الفيديو (من سجل التنزيل)
+  const subsOf = (j) => { try { return j?.extras ? JSON.parse(j.extras) : []; } catch { return []; } };
+  const langLabel = (l) => { try { return new Intl.DisplayNames(['ar'], { type: 'language' }).of(String(l).replace(/-orig$/, '')); } catch { return l; } };
+
   function details(x) {
     const job = jobOf(x) || doneJobs().find((j) => j.uri === x.uri);
     const th = thumbs.get(x.uri);
@@ -371,6 +375,7 @@ export function libraryView(ctx) {
       ['التاريخ', fmtDate(x.date)],
       ['المجلد', folderText(x) || '—'],
       ['المصدر', job ? `سَيْل · ${siteOf(job.url).name}${job.author ? ` · ${iso(`@${job.author}`)}` : ''}` : SOURCE_NAME[x.source]],
+      subsOf(job).length && ['الترجمة', subsOf(job).map((t) => (t.failed ? 'تعذّر تنزيلها؛ رفضها الموقع، فحُفظ المقطع دونها' : `${langLabel(t.lang)} · ملف ${iso('SRT')} بجانبه`)).join('، ')],
     ].filter(Boolean);
     const act = (icon, label, fn, cls = 'ghost') => h('button', { class: `btn ${cls}`, 'data-act': label, onclick: () => { close(); fn(); } }, ic(icon), label);
     const close = sheet(

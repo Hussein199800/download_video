@@ -68,8 +68,15 @@ class MediaWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
         val work = File(applicationContext.getExternalFilesDir(null) ?: applicationContext.filesDir, "media/${task.id}").apply { deleteRecursively(); mkdirs() }
         try {
             val outs = Ops(applicationContext, task, work, { canceled(task.id) }, { text, pct, engine -> stage(task.id, text, pct, engine) }).run()
-            val published = outs.map { MediaIO.publish(applicationContext, it).also { r -> r.path?.let { p -> MediaIO.scan(applicationContext, p) } } }
-            finish(store.update(task.id) { it.copy(state = "done", pct = 100f, stage = "", outputs = published, error = null, finishedAt = System.currentTimeMillis()) })
+            val p = task.params
+            // خطوة بعد تنزيل: الناتج بجانب الأصل في مجلد منصته
+            val seg = p.optJSONArray("saveIn")?.let { a -> List(a.length()) { a.optString(it).ifEmpty { null } } }
+            val published = outs.map { f ->
+                (if (seg != null) MediaIO.publishIn(applicationContext, f, seg) else MediaIO.publish(applicationContext, f)).also { r -> r.path?.let { x -> MediaIO.scan(applicationContext, x) } }
+            }
+            val done = store.update(task.id) { it.copy(state = "done", pct = 100f, stage = "", outputs = published, error = null, finishedAt = System.currentTimeMillis()) }
+            afterSuccess(task, published)
+            finish(done)
         } catch (e: FFmpeg.Canceled) {
             finish(store.update(task.id) { it.copy(state = "canceled", stage = "", finishedAt = System.currentTimeMillis()) })
         } catch (e: Exception) {
@@ -79,6 +86,27 @@ class MediaWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) 
             CANCELED.remove(task.id)
             work.deleteRecursively()
         }
+    }
+
+    /**
+     * بعد نجاح خطوة بعد التنزيل: حذف الملف الكامل إن طلب المستخدم الجزء فقط (ويُحدَّث سجل التنزيل ليشير إلى الجزء)،
+     * ثم الخطوة التالية (مثلاً ضغط المقطع للواتساب) على الناتج نفسه. معرّف الخطوة ثابت فلا تتكرر.
+     */
+    private fun afterSuccess(task: MediaTask, outs: List<MediaRef>) {
+        val p = task.params
+        val out = outs.firstOrNull() ?: return
+        val jobId = p.optString("job").ifEmpty { null }
+        if (p.optBoolean("deleteSource")) {
+            MediaIO.delete(applicationContext, task.inputs.first().uri)
+            jobId?.let { id -> Bus.store(applicationContext).update(id) { it.copy(path = out.path, uri = out.uri, title = it.title) }?.let { Bus.emit("state", it) } }
+        }
+        val next = p.optJSONObject("next") ?: return
+        val params = next.optJSONObject("params") ?: org.json.JSONObject()
+        p.optJSONArray("saveIn")?.let { params.put("saveIn", it) }
+        jobId?.let { params.put("job", it) }
+        val t = MediaTask(id = "${task.id}-${next.optString("op")}", op = next.optString("op"), title = task.title, inputs = listOf(out), params = params)
+        store.add(listOf(t))
+        Bus.emitTask(t)
     }
 
     private fun finish(t: MediaTask?) {

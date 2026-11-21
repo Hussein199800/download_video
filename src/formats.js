@@ -17,6 +17,12 @@ export function buildArgs(choice, settings = {}) {
     // عند تساوي الدقة يُفضَّل H.264 وصوت M4A لأنهما يعملان على كل الأجهزة
     a.push('-f', h > 0 ? `bv*[height<=${h}]+ba/b[height<=${h}]/b` : 'bv*+ba/b', '-S', 'res,vcodec:h264,acodec:m4a', '--merge-output-format', 'mp4', '--embed-metadata');
   }
+  // الترجمة (للفيديو): ملف SRT بجانب الفيديو، أو مدمجة فيه (yt-dlp يحذف الملف بعد الدمج)
+  const sub = choice.type !== 'audio' && choice.subs;
+  if (sub && sub.lang) {
+    a.push(sub.auto ? '--write-auto-subs' : '--write-subs', '--sub-langs', sub.lang, '--convert-subs', 'srt');
+    if (sub.embed) a.push('--embed-subs');
+  }
   const c = String(settings.connections || 4);
   // aria2c يفتح عدة اتصالات للملف الواحد ويوتيوب قد يخنقها؛ المنزّل الأصلي مع أجزاء متوازية
   // وقطع 10 م.ب أسرع وأثبت معه
@@ -48,6 +54,34 @@ export function albumFolder(title, id) {
   return `${short || 'منشور'} [${id}]`;
 }
 
+// اسم اللغة بالعربية؛ «en-orig» لغة المقطع الأصلية في يوتيوب
+const LANG = typeof Intl.DisplayNames === 'function' ? new Intl.DisplayNames(['ar'], { type: 'language' }) : null;
+function langName(code) {
+  const base = String(code).replace(/-orig$/, '');
+  try { return LANG?.of(base) || base; } catch { return base; }
+}
+
+/**
+ * الترجمات المتاحة: اليدوية كلها، ومن التلقائية العربية ولغة المقطع الأصلية والإنجليزية فقط
+ * (يوتيوب يعرض مئات الترجمات الآلية المترجمة عن الأصل). العربية أولاً ثم اليدوية.
+ */
+export function subtitleList(j) {
+  const out = [];
+  const seen = new Set();
+  const add = (lang, auto) => {
+    const key = lang.replace(/-orig$/, '');
+    if (seen.has(key) || lang === 'live_chat') return;
+    seen.add(key);
+    out.push({ lang, auto, label: auto ? `${langName(lang)} · تلقائية` : langName(lang) });
+  };
+  Object.keys(j.subtitles || {}).forEach((l) => add(l, false));
+  const auto = Object.keys(j.automatic_captions || {});
+  auto.filter((l) => /-orig$/.test(l)).forEach((l) => add(l, true));
+  auto.filter((l) => l === 'ar' || l === 'en').forEach((l) => add(l, true));
+  const rank = (s) => (s.lang.startsWith('ar') ? 0 : 1) * 2 + (s.auto ? 1 : 0);
+  return out.sort((a, b) => rank(a) - rank(b));
+}
+
 export function parseInfo(j) {
   if (j._type === 'album') return parseAlbum(j);
   if (j._type === 'playlist' || Array.isArray(j.entries)) {
@@ -65,6 +99,6 @@ export function parseInfo(j) {
     .map((f) => f.height))].sort((x, y) => y - x);
   return {
     kind: 'single', id: j.id, title: j.title || 'بدون عنوان', uploader: j.uploader || j.channel || '',
-    duration: j.duration || null, thumbnail: j.thumbnail || null, url: j.webpage_url || j.original_url || j.url, heights,
+    duration: j.duration || null, thumbnail: j.thumbnail || null, url: j.webpage_url || j.original_url || j.url, heights, subs: subtitleList(j),
   };
 }

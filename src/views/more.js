@@ -10,6 +10,8 @@ import { fetchLatest, isNewer, shouldCheck, RELEASES_PAGE, STABLE_APK, plainNote
 import { VERSION } from '../version.js';
 import { CHANGELOG } from '../changelog.js';
 import { openTour } from './tour.js';
+import { choicePicker } from './choice.js';
+import { quickLabel, quickHint, sameQuick, MAX_QUICK } from '../quick.js';
 
 export const ABOUT_NAME = 'حسين محمد علي الطويل';
 export const ABOUT_DUA = 'اللهم اغفر له ولوالديه، واجعل هذا العمل صدقة جارية في ميزان حسناتهم.';
@@ -120,6 +122,40 @@ function setting(title, hint, ...controls) {
   return el;
 }
 
+// تعديل طرق «احفظ بطريقتي»: حذف، وإضافة بالاختيار نفسه الذي في المعاينة
+function quickEditor(set) {
+  const row = setting('طرقك الجاهزة', `حتى ${count(MAX_QUICK, W.way)}، بالترتيب الذي تظهر به.`);
+  const list = h('div', { class: 'quick-list', id: 'quick-list' });
+  const add = h('button', { class: 'btn sm primary', id: 'quick-add' }, ic('plus'), 'أضف طريقة');
+  const draw = () => {
+    const q = getSettings().quick;
+    list.replaceChildren(...(q.length ? q.map((p, i) => h('div', { class: 'quick-row' },
+      ic(p.type === 'audio' ? 'audio' : 'video', `l-ic ${p.type === 'audio' ? 'c-violet' : 'c-sky'}`),
+      h('span', { class: 'l-txt' }, h('b', {}, quickLabel(p)), h('small', {}, quickHint(p))),
+      h('button', { class: 'icon-btn', 'aria-label': `احذف ${quickLabel(p)}`, 'data-del': String(i), html: ic('trash').innerHTML,
+        onclick: () => { set({ quick: q.filter((_, j) => j !== i) }, row); draw(); } }))) : [h('p', { class: 'hint' }, 'لا طرق؛ أضف واحدة على الأقل لتظهر النافذة.')]));
+    add.disabled = q.length >= MAX_QUICK;
+  };
+  add.onclick = () => {
+    const picker = choicePicker({ type: 'video', onType: (k) => { waRow.hidden = k !== 'video'; } });
+    const wa = h('input', { type: 'checkbox', class: 'sw', id: 'quick-wa' });
+    const waRow = h('label', { class: 'set-row' }, h('span', {}, 'ونسخة مضغوطة للواتساب', h('small', {}, 'نسخة إضافية أصغر بترميز H.264 تُرسل أسرع.')), wa);
+    const close = sheet(h('h3', {}, 'طريقة جديدة'), picker.el, waRow,
+      h('button', { class: 'btn primary wide', id: 'quick-save', onclick: () => {
+        const c = picker.choice();
+        const p = c.type === 'audio' ? c : { ...c, ...(wa.checked && { wa: true }) };
+        const q = getSettings().quick;
+        if (q.some((x) => sameQuick(x, p))) { toast('هذه الطريقة موجودة', 'bad'); return; }
+        set({ quick: [...q, p] }, row);
+        close();
+        draw();
+      } }, 'أضف'));
+  };
+  row.append(list, h('div', { class: 'row-gap' }, add));
+  draw();
+  return row;
+}
+
 function settingsPage({ page }) {
   const s = getSettings();
   const set = (patch, row) => { const n = setSettings(patch); if ('theme' in patch || 'fontScale' in patch) applyTheme(); row?.saved?.(); return n; };
@@ -171,6 +207,10 @@ function settingsPage({ page }) {
     h('div', { class: 'card form' },
       sw('اقتراح الرابط المنسوخ', 'عند فتح سَيْل أو العودة إليه تظهر فقاعة صغيرة بالرابط الموجود في الحافظة لتنزيله بلمسة. أندرويد لا يسمح بقراءة الحافظة والتطبيق في الخلفية.', 'clipboard'),
       h('div', { class: 'set-row' }, h('span', {}, 'بلاطة «نزّل المنسوخ»', h('small', {}, 'في الإعدادات السريعة: انسخ الرابط من أي تطبيق ثم اسحب الشريط واضغطها، فيفتح سَيْل الرابط مباشرة. وأيضاً بالضغط المطوّل على أيقونة سَيْل.')), tileBtn)),
+    h('h3', { class: 'sec-h' }, 'احفظ بطريقتي'),
+    h('div', { class: 'card form' },
+      sw('اسألني عند مشاركة رابط', 'عند مشاركة رابط إلى سَيْل أو فتح المنسوخ تظهر طرقك الجاهزة فيُنزَّل بلمسة، و«اختيار مفصّل» للمعاينة الكاملة. أطفئه لتذهب إلى المعاينة مباشرة.', 'shareAsk'),
+      quickEditor(set)),
     h('h3', { class: 'sec-h' }, 'أدوات الوسائط'),
     h('div', { class: 'card form' },
       outRow = setting('مكان الملفات الناتجة', 'التحويل والضغط والقص والدمج تحفظ ملفاً جديداً هنا، ولا تستبدل الأصل أبداً.',

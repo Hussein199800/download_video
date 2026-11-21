@@ -103,6 +103,13 @@ object MediaIO {
         return runCatching { DocumentsContract.getTreeDocumentId(t).substringAfter(':').ifEmpty { "الذاكرة الداخلية" } }.getOrDefault("مجلد مختار")
     }
 
+    /** ناتج خطوة تلقائية بعد التنزيل: بجانب الملف الأصلي في مجلد منصته (لا في «معالَج») */
+    fun publishIn(ctx: Context, file: File, segments: List<String?>): MediaRef {
+        val size = file.length()
+        val saved = Saver.publishIn(ctx, file, segments)
+        return MediaRef(saved.uri, saved.path.substringAfterLast('/'), size, saved.path, Saver.mime(file.name))
+    }
+
     /** ينقل الناتج إلى مكانه النهائي باسم لا يستبدل أي ملف موجود */
     fun publish(ctx: Context, file: File): MediaRef {
         val mime = Saver.mime(file.name)

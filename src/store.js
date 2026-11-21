@@ -1,3 +1,5 @@
+import { DEFAULT_QUICK, sanitizeQuick } from './quick.js';
+
 // الإعدادات في localStorage، مع حصر كل قيمة في حدودها حتى لا يكسر ملف تالف التطبيق
 const KEY = 'sayl.settings';
 const META = 'sayl.meta';
@@ -5,6 +7,8 @@ const META = 'sayl.meta';
 export const DEFAULTS = Object.freeze({
   theme: 'auto', fontScale: 1, video: 'best', audio: 'mp3', kbps: 192, parallel: 1, aria2: false, clipboard: true,
   connections: 4, retries: 5, window: Object.freeze({ on: false, from: '01:00', to: '07:00' }),
+  // «احفظ بطريقتي» عند مشاركة رابط، وطرقها
+  shareAsk: true, quick: DEFAULT_QUICK,
 });
 const VIDEO = ['best', 2160, 1440, 1080, 720, 480, 360];
 
@@ -26,6 +30,8 @@ function sanitize(s) {
     clipboard: typeof s.clipboard === 'boolean' ? s.clipboard : DEFAULTS.clipboard,
     connections: oneOf(Number(s.connections), [2, 4, 8], DEFAULTS.connections),
     retries: oneOf(Number(s.retries), [0, 3, 5, 10], DEFAULTS.retries),
+    shareAsk: typeof s.shareAsk === 'boolean' ? s.shareAsk : DEFAULTS.shareAsk,
+    quick: sanitizeQuick(s.quick),
     window: {
       on: Boolean(s.window?.on),
       from: time(s.window?.from, DEFAULTS.window.from),
