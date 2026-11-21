@@ -58,3 +58,25 @@ test('فرز المكتبة وتصفيتها', () => {
   assert.equal(filterItems(items, { kind: 'all', min: 0, q: 'محاضره' }).length, 1);
   assert.equal(filterItems(items, { kind: 'all', min: 0, q: 'دروس' }).length, 1);
 });
+
+test('ألبومات المكتبة والمنصة والبحث في وصف المنشور', async () => {
+  const { groupAlbums, platformOf } = await import('../../src/views/library.js');
+  const f = 'Download/سيل/تيك توك/رحلة الشتاء [7000000000000000001]';
+  const items = [
+    { name: '010.jpg', kind: 'image', folder: f, size: 3, date: 5, uri: 'a10' },
+    { name: 'فيديو.mp4', kind: 'video', folder: 'Download/سيل/يوتيوب', size: 9, date: 4, uri: 'v' },
+    { name: '002.jpg', kind: 'image', folder: f, size: 2, date: 3, uri: 'a2' },
+    { name: 'صورة.jpg', kind: 'image', folder: 'Download/سيل/حالات واتساب', size: 1, date: 2, uri: 's' },
+  ];
+  const g = groupAlbums(items);
+  assert.equal(g.length, 3);
+  assert.equal(g[0].album, true);
+  assert.deepEqual(g[0].items.map((x) => x.name), ['002.jpg', '010.jpg']);
+  assert.equal(g[0].name, 'رحلة الشتاء');
+  assert.equal(g[0].size, 5);
+  assert.equal(platformOf(items[0]), 'تيك توك');
+  assert.equal(platformOf(items[3]), null);
+  const desc = { a2: 'صور من الجبل #سفر', a10: 'صور من الجبل #سفر' };
+  assert.equal(filterItems(items, { kind: 'all', min: 0, q: 'الجبل' }, (x) => desc[x.uri] || '').length, 2);
+  assert.equal(filterItems(items, { kind: 'all', min: 0, q: '', platform: 'يوتيوب' }).length, 1);
+});

@@ -1,7 +1,8 @@
 // المكتبة: كل ملفات سَيْل، ومجلدات يختارها المستخدم، وكل وسائط الهاتف إن سمح بذلك.
 // تصنيف وبحث وفرز وتصفية، وعرض شبكي أو قائمة، وتحديد متعدد، والمكررات والملفات الكبيرة.
 import { h, ic, toast, sheet, confirmSheet, explain, infoBtn, fmtBytes, fmtDur, fmtDate } from '../ui.js';
-import { Media, Statuses, Sayl } from '../native.js';
+import { Media, Statuses, Sayl, Clip } from '../native.js';
+import { siteOf } from '../links.js';
 import { count, W, iso, matches } from '../text.js';
 import { doneJobs, onJobs, forget } from '../state.js';
 import { historyView } from './history.js';
@@ -32,8 +33,41 @@ export function sortItems(items, by, dir) {
   return dir === 'desc' ? out.reverse() : out;
 }
 
-export function filterItems(items, f) {
-  return items.filter((x) => (f.kind === 'all' || x.kind === f.kind) && (!f.min || x.size >= f.min) && matches(`${x.name} ${x.folder}`, f.q));
+// المنصة من مجلد الحفظ: Download/سيل/<المنصة>/…
+export const PLATFORMS = ['يوتيوب', 'تيك توك', 'فيسبوك', 'إنستغرام', 'إكس', 'مواقع أخرى'];
+export function platformOf(x) {
+  const m = String(x.folder || '').match(/^Download\/سيل\/([^/]+)/);
+  return m && PLATFORMS.includes(m[1]) ? m[1] : null;
+}
+
+// extra(x): نص إضافي للبحث (وصف المنشور واسم الحساب من سجل التنزيل)
+export function filterItems(items, f, extra = () => '') {
+  return items.filter((x) => (f.kind === 'all' || x.kind === f.kind) && (!f.min || x.size >= f.min)
+    && (!f.platform || f.platform === 'all' || platformOf(x) === f.platform)
+    && matches(`${x.name} ${x.folder} ${extra(x)}`, f.q));
+}
+
+// صور منشور واحد (مجلد ينتهي بـ [المعرّف]) تصبح بطاقة ألبوم في مكان أحدث صورها
+export const albumKey = (x) => (x.kind === 'image' && /\[[\w-]+\]$/.test(x.folder || '') ? x.folder : null);
+export function groupAlbums(list) {
+  const out = [];
+  const albums = new Map();
+  for (const x of list) {
+    const k = albumKey(x);
+    if (!k) { out.push(x); continue; }
+    let a = albums.get(k);
+    if (!a) {
+      a = { album: true, key: k, items: [], name: k.split('/').pop().replace(/\s*\[[\w-]+\]$/, ''), size: 0, date: 0 };
+      albums.set(k, a);
+      out.push(a);
+    }
+    a.items.push(x);
+    a.size += x.size || 0;
+    a.date = Math.max(a.date, x.date || 0);
+  }
+  // صور الألبوم بترتيب المصدر (001، 002…)
+  albums.forEach((a) => a.items.sort((p, q) => p.name.localeCompare(q.name, 'en', { numeric: true })));
+  return out;
 }
 
 function folderText(x) {
@@ -43,20 +77,26 @@ function folderText(x) {
 export function libraryView(ctx) {
   const { page, open } = ctx;
   page.classList.add('wide');
-  const st = { kind: 'all', min: 0, q: '', sort: 'date', dir: 'desc', view: 'grid', sources: ['sayl'], ...load() };
+  const st = { kind: 'all', min: 0, q: '', sort: 'date', dir: 'desc', view: 'grid', sources: ['sayl'], platform: 'all', ...load() };
   st.q = '';
   let items = [];
   let shown = [];
+  let entries = [];
+  // سجل التنزيل لكل ملف: وصف المنشور واسم الحساب والرابط الأصلي
+  let jobsByUri = new Map();
+  const jobOf = (x) => jobsByUri.get(x.uri);
+  const extra = (x) => { const j = jobOf(x); return j ? `${j.title || ''} ${j.author || ''}` : ''; };
   let limit = PAGE;
   let selecting = false;
   const sel = new Set();
   let reqToken = 0;
 
-  const persist = () => save({ kind: st.kind, min: st.min, sort: st.sort, dir: st.dir, view: st.view, sources: st.sources });
+  const persist = () => save({ kind: st.kind, min: st.min, sort: st.sort, dir: st.dir, view: st.view, sources: st.sources, platform: st.platform });
 
   const statsBox = h('div', { class: 'stats' });
   const sourcesBox = h('div', { class: 'chips c-green', role: 'group', 'aria-label': 'المصادر' });
   const kindsBox = h('div', { class: 'chips c-green', role: 'group', 'aria-label': 'النوع' });
+  const platformsBox = h('div', { class: 'chips c-green', role: 'group', 'aria-label': 'المنصة' });
   const search = h('input', { class: 'search', id: 'lib-q', type: 'search', placeholder: 'ابحث بالاسم…', enterkeyhint: 'search', 'aria-label': 'بحث في المكتبة' });
   const sortSel = h('select', { class: 'field sm-field', id: 'lib-sort', 'aria-label': 'الفرز' }, SORTS.map(([v, l]) => h('option', { value: v, selected: st.sort === v }, `الفرز: ${l}`)));
   const sizeSel = h('select', { class: 'field sm-field', id: 'lib-size', 'aria-label': 'تصفية بالحجم' }, SIZES.map(([v, l]) => h('option', { value: String(v), selected: st.min === v }, l)));
@@ -185,17 +225,44 @@ export function libraryView(ctx) {
     return el;
   }
 
+  // بطاقة ألبوم: الصورة الأولى وعدد الصور المحفوظة فعلاً؛ في وضع التحديد تحدد كل صوره
+  function albumCard(a) {
+    const on = a.items.every((x) => sel.has(x.uri));
+    const el = h('button', {
+      class: `lib-item album ${st.view}${on && selecting ? ' sel' : ''}`, type: 'button', 'data-album': a.key,
+      onclick: () => {
+        if (!selecting) return openLibAlbum(a);
+        a.items.forEach((x) => (on ? sel.delete(x.uri) : sel.add(x.uri)));
+        drawBar(); drawList();
+      },
+    },
+    h('span', { class: 'lib-th c-amber' }, ic('image')),
+    h('span', { class: 'lib-count' }, ic('image'), String(a.items.length)),
+    selecting && h('span', { class: 'lib-check', 'aria-hidden': 'true' }, ic('check')),
+    h('span', { class: 'lib-txt' }, h('b', { class: 'more', dir: 'auto' }, a.name), h('small', {}, `ألبوم · ${count(a.items.length, W.image)} · ${fmtBytes(a.size)}`)));
+    thumbOf(a.items[0], el);
+    return el;
+  }
+
   function drawList() {
-    const page1 = shown.slice(0, limit);
+    const page1 = entries.slice(0, limit);
     list.className = `lib-list ${st.view}`;
-    list.replaceChildren(...(page1.length ? page1.map(card) : [h('div', { class: 'card empty' }, ic('grid'),
+    list.replaceChildren(...(page1.length ? page1.map((e) => (e.album ? albumCard(e) : card(e))) : [h('div', { class: 'card empty' }, ic('grid'),
       items.length ? 'لا نتائج مطابقة للبحث أو التصفية.' : st.sources.length === 1 ? 'لا ملفات بعد. ما تنزّله أو تعالجه بسَيْل يظهر هنا.' : 'لا ملفات في المصادر المختارة.')]));
-    more.hidden = shown.length <= limit;
-    more.textContent = `عرض المزيد (${count(shown.length - limit, W.file)})`;
+    more.hidden = entries.length <= limit;
+    more.textContent = `عرض المزيد (${count(entries.length - limit, W.item)})`;
   }
 
   function draw() {
-    shown = sortItems(filterItems(items, st), st.sort, st.dir);
+    jobsByUri = new Map(doneJobs().filter((j) => j.uri).map((j) => [j.uri, j]));
+    // تصفية المنصة تظهر حين يكون في المكتبة أكثر من منصة
+    const present = PLATFORMS.filter((p) => items.some((x) => platformOf(x) === p));
+    if (st.platform !== 'all' && !present.includes(st.platform)) st.platform = 'all';
+    platformsBox.hidden = present.length < 2;
+    platformsBox.replaceChildren(...[['all', 'كل المنصات'], ...present.map((p) => [p, p])].map(([v, l]) => h('button', { class: st.platform === v ? 'on' : '', 'data-platform': v, 'aria-pressed': String(st.platform === v),
+      onclick: () => { st.platform = v; limit = PAGE; persist(); draw(); } }, l)));
+    shown = sortItems(filterItems(items, st, extra), st.sort, st.dir);
+    entries = groupAlbums(shown);
     kindsBox.replaceChildren(...KINDS.map(([v, l]) => h('button', { class: st.kind === v ? 'on' : '', 'data-kind': v, 'aria-pressed': String(st.kind === v), onclick: () => { st.kind = v; limit = PAGE; persist(); draw(); } }, l)));
     dirBtn.innerHTML = ic(st.dir === 'desc' ? 'down' : 'up').innerHTML;
     dirBtn.setAttribute('aria-label', st.dir === 'desc' ? 'تنازلي' : 'تصاعدي');
@@ -293,7 +360,7 @@ export function libraryView(ctx) {
   }
 
   function details(x) {
-    const job = doneJobs().find((j) => j.uri === x.uri);
+    const job = jobOf(x) || doneJobs().find((j) => j.uri === x.uri);
     const th = thumbs.get(x.uri);
     const src = Statuses.src(th?.thumb);
     const rows = [
@@ -303,17 +370,53 @@ export function libraryView(ctx) {
       x.width && ['الأبعاد', `${iso(`${x.width}×${x.height}`)}${resName(x.width, x.height) ? ` · ${resName(x.width, x.height)}` : ''}`],
       ['التاريخ', fmtDate(x.date)],
       ['المجلد', folderText(x) || '—'],
-      ['المصدر', job ? `سَيْل · ${job.site || ''}` : SOURCE_NAME[x.source]],
+      ['المصدر', job ? `سَيْل · ${siteOf(job.url).name}${job.author ? ` · ${iso(`@${job.author}`)}` : ''}` : SOURCE_NAME[x.source]],
     ].filter(Boolean);
     const act = (icon, label, fn, cls = 'ghost') => h('button', { class: `btn ${cls}`, 'data-act': label, onclick: () => { close(); fn(); } }, ic(icon), label);
     const close = sheet(
       src ? h('img', { class: 'det-thumb', src, alt: '' }) : null,
       h('h3', { dir: 'auto', class: 'wrap' }, x.name),
       h('dl', { class: 'kv' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
+      // وصف المنشور كما ورد بأسطره، واسم الحساب، والرابط الأصلي
+      job && job.title && job.title !== x.name && h('p', { class: 'post-desc more', style: '--lines:4', dir: 'auto' }, job.title),
+      postActions(job, () => close()),
       h('div', { class: 'row-btns' }, act('play', 'فتح', () => Media.open(x.uri, x.mime, x.name).catch((e) => toast(e.message, 'bad')), 'primary'), act('share', 'مشاركة', () => Media.share([x.uri]).catch((e) => toast(e.message, 'bad')))),
       x.kind !== 'image' && h('div', { class: 'row-btns' }, act('info', 'التفاصيل التقنية', () => fileInfoSheet(x)), act('tools', 'أدوات', () => toolsFor([x]))),
       h('div', { class: 'row-btns' }, act('edit', 'إعادة تسمية', () => rename(x)), act('trash', 'حذف', () => remove([x]), 'danger')),
     );
+  }
+
+  // رابط المنشور الأصلي من سجل التنزيل (دون رقم الصورة)
+  const postUrl = (j) => (j?.url ? String(j.url).split('#')[0] : null);
+
+  function postActions(j, close) {
+    const url = postUrl(j);
+    if (!url) return null;
+    return h('div', { class: 'row-btns' },
+      h('button', { class: 'btn ghost', 'data-act': 'فتح المنشور', onclick: () => { close?.(); Sayl.openUrl(url).catch((e) => toast(e.message, 'bad')); } }, ic('link'), 'فتح المنشور'),
+      h('button', { class: 'btn ghost', 'data-act': 'نسخ الرابط', onclick: async () => { try { await Clip.write(url); toast('نُسخ الرابط', 'ok'); } catch { toast('تعذّر النسخ', 'bad'); } } }, ic('copy'), 'نسخ الرابط'));
+  }
+
+  // صفحة الألبوم: الوصف والحساب، والصور المتاحة فعلاً بترتيب المصدر
+  function openLibAlbum(a) {
+    open({ title: 'ألبوم', render: ({ page, back }) => {
+      const j = a.items.map(jobOf).find(Boolean);
+      page.append(...[
+        h('div', { class: 'hero c-amber' }, ic('image', 'h-ic'),
+          h('b', { class: 'more', style: '--lines:4', dir: 'auto', id: 'lib-album-title' }, j?.title || a.name),
+          h('small', {}, [j?.author && iso(`@${j.author}`), platformOf(a.items[0]), count(a.items.length, W.image), fmtBytes(a.size)].filter(Boolean).join(' · '))),
+        postActions(j),
+        h('div', { class: 'row-btns' },
+          h('button', { class: 'btn ghost', 'data-act': 'مشاركة الكل', onclick: () => Media.share(a.items.map((x) => x.uri)).catch((e) => toast(e.message, 'bad')) }, ic('share'), 'مشاركة الكل'),
+          h('button', { class: 'btn danger', 'data-act': 'حذف الألبوم', onclick: async () => { await remove(a.items); if (!a.items.some((x) => items.some((y) => y.uri === x.uri))) back(); } }, ic('trash'), 'حذف الألبوم')),
+        h('div', { class: 'album-grid lib-album' }, a.items.map((x) => {
+          const el = h('button', { class: 'album-item', type: 'button', 'data-uri': x.uri, style: x.width && x.height ? `aspect-ratio:${x.width} / ${x.height}` : 'aspect-ratio:3 / 4', onclick: () => details(x) },
+            h('span', { class: 'lib-th album-ph' }, ic('image')), h('span', { class: 'album-n' }, x.name.replace(/\.[^.]+$/, '')));
+          thumbOf(x, el);
+          return el;
+        })),
+      ].filter(Boolean));
+    } });
   }
 
   // ---------- التحميل والتحديث ----------
@@ -349,6 +452,7 @@ export function libraryView(ctx) {
     sourcesBox,
     h('div', { class: 'lib-tools' }, search, h('div', { class: 'lib-row' }, sortSel, dirBtn, sizeSel, viewBtn, selBtn)),
     kindsBox,
+    platformsBox,
     h('div', { class: 'lib-links' },
       h('button', { class: 'link', id: 'open-dups', onclick: () => openDuplicates(ctx, items) }, ic('dup'), 'الملفات المكررة'),
       h('button', { class: 'link', id: 'open-history', onclick: () => open({ title: 'سجل التنزيلات', render: historyView }) }, ic('history'), 'سجل التنزيلات'),

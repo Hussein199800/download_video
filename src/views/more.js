@@ -68,7 +68,7 @@ function updateSheet(rel) {
         close();
         const c2 = sheet(h('h3', {}, 'لا يمكن التحديث فوق هذه النسخة'),
           h('p', { class: 'muted' }, 'النسخة المثبّتة على هاتفك موقّعة بمفتاح مختلف عن نسخ الإصدار الرسمية (غالباً نسخة تجريبية)، وأندرويد لا يقبل تحديثاً بتوقيع مختلف حمايةً لك.\nالحل مرة واحدة: احذف سَيْل، ثم ثبّت أحدث نسخة من الرابط. ملفاتك في مجلد التنزيلات ← سيل تبقى كما هي، ويُفقد السجل والإعدادات فقط. بعدها تصل التحديثات من داخل التطبيق عادياً.'),
-          h('button', { class: 'btn primary wide', onclick: () => { window.open(STABLE_APK, '_blank'); c2(); } }, ic('download'), 'فتح رابط التحميل'),
+          h('button', { class: 'btn primary wide', onclick: () => { Sayl.openUrl(STABLE_APK).catch((e) => toast(e.message, 'bad')); c2(); } }, ic('download'), 'فتح رابط التحميل'),
           h('button', { class: 'btn ghost wide', onclick: () => c2() }, 'إغلاق'));
         return;
       }

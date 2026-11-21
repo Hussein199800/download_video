@@ -513,6 +513,35 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForSelector('.album-grid');
     await page.waitForTimeout(300);
     check('صورة حُذف ملفها تُحدَّد وحدها لإعادة تنزيلها', await page.locator('.album-item.sel').count() === 1 && await page.locator('.album-item[data-i="5"].sel').count() === 1 && /نزّل صورة واحدة/.test(await page.locator('#album-add').innerText()));
+    // المرحلة 4: الألبوم في المكتبة بطاقة واحدة، والبحث في الوصف، وفتح المنشور
+    await page.tap('.topbar .icon-btn[aria-label="رجوع"]');
+    await tabTo(page, 'library');
+    await page.waitForSelector('[data-album]');
+    const albumCardText = await page.locator('[data-album]').innerText();
+    check('صور المنشور بطاقة ألبوم واحدة بعددها', await page.locator('[data-album]').count() === 1 && /50 صورة/.test(albumCardText), albumCardText.replace(/\s+/g, ' '));
+    await page.locator('#lib-q').tap();
+    await page.locator('#lib-q').pressSequentially('سفر', { delay: 40 });
+    await page.waitForTimeout(250);
+    // يظهر الألبوم وصوت المنشور نفسه فقط
+    check('البحث بكلمة من وصف المنشور يجد الألبوم وصوته', await page.locator('[data-album]').count() === 1
+      && (await page.locator('.lib-item:not([data-album])').allInnerTexts()).every((t) => /صوت المنشور/.test(t)),
+      (await page.locator('.lib-list').innerText()).replace(/\s+/g, ' ').slice(0, 200));
+    await page.locator('#lib-q').fill('');
+    await page.waitForTimeout(250);
+    await page.tap('[data-album]');
+    await page.waitForSelector('.lib-album');
+    check('صفحة الألبوم: الوصف بأسطره والصور بترتيبها', /صور من الجبل/.test(await text(page)) && (await page.locator('.lib-album .album-n').allInnerTexts()).slice(0, 3).join(',') === '001,002,003');
+    await page.tap('[data-act="فتح المنشور"]');
+    check('«فتح المنشور» يفتح الرابط الأصلي', await page.evaluate(() => window.__opened) === 'https://www.tiktok.com/@travel.ar/photo/7000000000000000001');
+    await shot(page, { path: path.join(OUT, 'library-album.png'), fullPage: true });
+    // حذف صورة: العدد يعكس المتاح
+    await page.locator('.lib-album .album-item').nth(4).tap();
+    await page.locator('.sheet [data-act="حذف"]').tap();
+    await page.locator('.sheet .btn.danger').tap();
+    await page.waitForTimeout(400);
+    await page.tap('.topbar .icon-btn[aria-label="رجوع"]');
+    await page.waitForTimeout(300);
+    check('بعد حذف صورة يعرض الألبوم 49', /49 صورة/.test(await page.locator('[data-album]').innerText()));
     check('لا أخطاء (الألبوم)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
   }

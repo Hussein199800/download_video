@@ -44,6 +44,16 @@ function mockInfo(url) {
     thumbnail: '', webpage_url: url, formats: [{ height: 1080, vcodec: 'avc1' }, { height: 720, vcodec: 'avc1' }, { height: 360, vcodec: 'avc1' }] }) });
 }
 
+// ما يكتمل تنزيله يظهر في مكتبة المحرك الوهمي كما في MediaStore
+function mockSaved(j, name) {
+  const folder = j.path.split('/').slice(0, -1).join('/');
+  const kind = j.kind === 'image' ? 'image' : j.kind === 'audio' || j.kind === 'music' ? 'audio' : 'video';
+  mockLib.push({ id: `p:${j.path}`.toLowerCase(), uri: j.uri, name, size: kind === 'image' ? 350000 + (j.choice?.index || 0) * 1000 : 52428800, date: Date.now(),
+    duration: kind === 'image' ? 0 : 245000, width: 1080, height: kind === 'image' ? 1440 : 1920, mime: kind === 'image' ? 'image/jpeg' : kind === 'audio' ? 'audio/mpeg' : 'video/mp4',
+    kind, source: 'sayl', folder, owned: true });
+  mfire('libraryChanged', {});
+}
+
 function mockReorder(id, target) {
   const ids = [...mockJobs.values()].filter((j) => ['queued', 'waiting_network', 'retrying'].includes(j.state)).sort((a, b) => a.order - b.order).map((j) => j.id);
   const i = ids.indexOf(id);
@@ -75,9 +85,11 @@ function mockRun(j) {
       if (cur.kind === 'image' || cur.kind === 'music') {
         const name = cur.kind === 'music' ? 'صوت المنشور.mp3' : `${String(cur.choice.index).padStart(3, '0')}.jpg`;
         Object.assign(cur, { state: 'done', path: `Download/سيل/تيك توك/${cur.folder}/${name}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
+        mockSaved(cur, name);
         return fire('state', { ...cur });
       }
       Object.assign(cur, { state: 'done', path: `Download/سيل/${siteOf(cur.url).folder}/${cur.folder ? cur.folder + '/' : ''}${cur.title}.${cur.kind === 'audio' ? 'mp3' : 'mp4'}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
+      mockSaved(cur, cur.path.split('/').pop());
       fire('state', { ...cur });
     } else fire('progress', { ...cur });
   }, 150);
@@ -104,6 +116,7 @@ const mock = {
   toTop: ({ id }) => { mockReorder(id, () => 0); return Promise.resolve(); },
   startNow: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { scheduledAt: -1, wifiOnly: false, state: 'queued' }); fire('state', { ...j }); } return Promise.resolve(); },
   retry: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }); fire('state', { ...j }); mockRun(j); } return Promise.resolve(); },
+  openUrl: ({ url }) => { window.__opened = url; return Promise.resolve(); },
   // الملفات التي «حُذفت يدوياً» في الاختبار: window.__gone
   exists: ({ uris }) => Promise.resolve({ exists: uris.map((u) => {
     const j = [...mockJobs.values()].find((x) => `mock://${x.id}` === u);
@@ -145,6 +158,7 @@ export const Sayl = {
   retry: (id) => P.retry({ id }),
   remove: (id, deleteFile = false) => P.remove({ id, deleteFile }),
   exists: async (uris) => (await P.exists({ uris })).exists,
+  openUrl: (url) => P.openUrl({ url }),
   clearFinished: () => P.clearFinished(),
   open: (id) => P.open({ id }),
   share: (id) => P.share({ id }),

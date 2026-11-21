@@ -133,6 +133,19 @@ class SaylPlugin : Plugin() {
         call.resolve()
     }
 
+    /** فتح رابط (المنشور الأصلي أو صفحة التحميل) في المتصفح أو تطبيقه؛ http/https فقط */
+    @PluginMethod
+    fun openUrl(call: PluginCall) {
+        val url = call.getString("url") ?: return call.reject("url مطلوب")
+        if (!url.startsWith("https://") && !url.startsWith("http://")) return call.reject("رابط غير صالح")
+        try {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("لا يوجد تطبيق يفتح الرابط")
+        }
+    }
+
     /** أي الملفات المحفوظة ما زالت موجودة (لإعادة تنزيل صورة حُذفت يدوياً من ألبوم) */
     @PluginMethod
     fun exists(call: PluginCall) {

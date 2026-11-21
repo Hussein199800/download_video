@@ -398,6 +398,11 @@ bdi { unicode-bidi: isolate; }
 .album-saved span { width: .75rem; height: .75rem; }
 .album-item.saved .album-saved { display: inline-flex; }
 html.two-col .album-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.lib-count { position: absolute; top: .5rem; inset-inline-start: .5rem; display: inline-flex; align-items: center; gap: .2rem; background: #000b; color: #fff; font-size: var(--fz-xs); padding: .1rem .45rem; border-radius: var(--r-pill); direction: ltr; }
+.lib-count span { width: .8rem; height: .8rem; }
+.lib-item.list .lib-count { top: auto; bottom: .75rem; inset-inline-start: .75rem; }
+.post-desc { white-space: pre-line; overflow-wrap: anywhere; color: var(--txt); background: var(--soft); border-radius: var(--r-md); padding: .625rem .75rem; margin: 0; }
+.lib-album .album-n { direction: ltr; }
 
 /* ---------- الجولة التعريفية ---------- */
 .modal.tour { align-items: center; padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + var(--safe-bot)); }
