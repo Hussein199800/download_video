@@ -58,7 +58,11 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
         // كل تحديث في هذه المحاولة مشروط بأنها ما زالت الأحدث (إيقاف ثم استكمال سريع يبدأ محاولة جديدة)
         val mine = { store.get(job.id)?.run == job.run }
         try {
-            val file = if (job.engine == 2) server2(job, work) else server1WithFallback(job, work)
+            val file = when (job.engine) {
+                2 -> server2(job, work)
+                3 -> photo(job, work)
+                else -> server1WithFallback(job, work)
+            }
             // أُلغيت أو أُوقفت أو بدأت محاولة أحدث قبل الحفظ: لا ننشر شيئاً
             val before = store.get(job.id)
             if (before == null || !mine() || before.state == "canceled") throw Server2.Canceled()
@@ -125,6 +129,27 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
                     else -> throw e
                 }
             }
+        }
+    }
+
+    /**
+     * صورة من ألبوم أو صوت منشور الصور: choice = {index, urls, page}.
+     * إن انتهت صلاحية الروابط يُعاد قراءة المنشور وتؤخذ الصورة نفسها برقمها.
+     */
+    private fun photo(job: Job, work: File): File {
+        val c = org.json.JSONObject(job.choice ?: "{}")
+        val index = c.optInt("index", 0)
+        val urls = c.optJSONArray("urls")?.let { a -> List(a.length()) { a.getString(it) } }.orEmpty()
+        val base = if (job.kind == "music") "صوت المنشور" else "%03d".format(index)
+        val canceled = { store.get(job.id).let { it == null || it.run != job.run || it.state == "canceled" || it.state == "paused" } }
+        val progress = { done: Long, total: Long -> liveProgress(job) { it.copy(downloaded = done, total = total, pct = if (total > 0) done * 100f / total else it.pct) } }
+        return try {
+            TikTokPhotos.fetch(urls, File(work, "img"), base, canceled, progress)
+        } catch (e: TikTokPhotos.Expired) {
+            val a = TikTokPhotos.read(c.optString("page").ifEmpty { job.url.substringBefore('#') })
+            val fresh = if (job.kind == "music") listOfNotNull(a.audio) else a.items.firstOrNull { it.index == index }?.urls.orEmpty()
+            if (fresh.isEmpty()) throw IllegalStateException("الصورة لم تعد في المنشور")
+            TikTokPhotos.fetch(fresh, File(work, "img"), base, canceled, progress)
         }
     }
 

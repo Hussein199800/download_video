@@ -384,6 +384,21 @@ bdi { unicode-bidi: isolate; }
 .clip-bubble .cb-x { width: var(--tap); height: var(--tap); padding: .8rem; border: 0; background: none; color: var(--mute); cursor: pointer; flex: none; border-radius: 50%; }
 .clip-bubble.out { animation: down .2s ease forwards; }
 
+/* ---------- ألبوم الصور ---------- */
+.album-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .375rem; margin-top: .5rem; }
+.album-item { position: relative; overflow: hidden; border-radius: var(--r-sm); border: 2px solid transparent; background: var(--soft); padding: 0; cursor: pointer; min-height: var(--tap); }
+.album-item img, .album-ph { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.album-ph { display: grid; place-items: center; color: var(--mute); }
+.album-ph span { width: 1.75rem; height: 1.75rem; opacity: .5; }
+.album-n { position: absolute; bottom: .3rem; inset-inline-start: .3rem; background: #000b; color: #fff; font-size: var(--fz-xs); padding: 0 .4rem; border-radius: var(--r-pill); direction: ltr; }
+.album-check { position: absolute; top: .3rem; inset-inline-end: .3rem; width: 1.6rem; height: 1.6rem; padding: .25rem; border-radius: 50%; border: 2px solid #fff; background: #0006; color: transparent; }
+.album-item.sel { border-color: #f59e0b; }
+.album-item.sel .album-check { background: #f59e0b; border-color: #f59e0b; color: #2a1700; }
+.album-saved { display: none; position: absolute; top: .3rem; inset-inline-start: .3rem; align-items: center; gap: .125rem; background: #065f46f0; color: #fff; font-size: var(--fz-xs); padding: .1rem .4rem .1rem .3rem; border-radius: var(--r-pill); }
+.album-saved span { width: .75rem; height: .75rem; }
+.album-item.saved .album-saved { display: inline-flex; }
+html.two-col .album-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
 /* ---------- الجولة التعريفية ---------- */
 .modal.tour { align-items: center; padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + var(--safe-bot)); }
 .tour-b { position: relative; width: 100%; max-width: 28rem; margin: 0 auto; background: var(--surface); border-radius: var(--r-xl); padding: 1.75rem 1.25rem 1.25rem; display: grid; justify-items: center; gap: .625rem; text-align: center; animation: up .25s ease; box-shadow: var(--shadow); max-height: 100%; overflow: auto; }

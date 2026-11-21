@@ -36,6 +36,9 @@ async function newPage(browser, base, { scheme = 'dark', storage = {}, viewport 
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, colorScheme: scheme, hasTouch: touch });
   await ctx.route('https://api.github.com/**', (r) => r.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ tag_name: 'v' + VER, body: '', assets: [] }) }));
+  // صور المحرك الوهمي (ألبومات): صورة صغيرة بدل الإنترنت
+  await ctx.route('https://example.invalid/**', (r) => r.fulfill({ status: 200, contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64') }));
   const init = intro ? storage : { 'sayl.meta': JSON.stringify({ tourSeen: true, seenVersion: VER }), ...storage };
   // تُكتب مرة واحدة فقط (إعادة التحميل لا تعيدها) حتى تُختبر القيم المحفوظة بعدها
   await ctx.addInitScript((s) => { for (const [k, v] of Object.entries(s)) if (localStorage.getItem(k) == null) localStorage.setItem(k, v); }, init);

@@ -9,6 +9,7 @@ import { count, W } from '../text.js';
 import { choicePicker, uid } from './choice.js';
 import { whenPicker } from './when.js';
 import { openPlaylist } from './playlist.js';
+import { openAlbum } from './album.js';
 import { openBatch } from './batch.js';
 import { openStatuses } from './statuses.js';
 import { engineUpdateFlow, cookiesFlow } from './more.js';
@@ -91,6 +92,7 @@ export function homeView(ctx) {
       const info = parseInfo(await Sayl.info(url));
       if (my !== req) return;
       if (info.kind === 'playlist') { result.replaceChildren(); openPlaylist(ctx, info, url); return; }
+      if (info.kind === 'album') { result.replaceChildren(); openAlbum(ctx, info); return; }
       shownUrl = url;
       result.replaceChildren(preview(info, url, current));
     } catch (e) {

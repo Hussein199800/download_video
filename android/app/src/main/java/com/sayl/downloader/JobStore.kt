@@ -40,6 +40,10 @@ data class Job(
     val order: Long = createdAt,
     /** رقم محاولة التشغيل: يزيد مع كل بدء، فلا تغيّر محاولة قديمة حالة محاولة أحدث */
     val run: Int = 0,
+    /** ألبوم: هوية المنشور («tiktok:رقم») تجمع صوره في الطابور والمكتبة */
+    val group: String? = null,
+    /** اسم الحساب صاحب المنشور، للبحث في المكتبة */
+    val author: String? = null,
 ) {
     /** ما زال في الطابور أو يعمل */
     val active get() = state == "queued" || state == "running" || state == "waiting_network" || state == "retrying"
@@ -53,7 +57,7 @@ data class Job(
         .put("speed", speed).put("downloaded", downloaded).put("total", total).put("eta", eta).put("error", error)
         .put("path", path).put("uri", uri).put("attempts", attempts).put("retryAt", retryAt).put("engine", engine)
         .put("scheduledAt", scheduledAt).put("wifiOnly", wifiOnly).put("createdAt", createdAt).put("startedAt", startedAt)
-        .put("finishedAt", finishedAt).put("order", order).put("run", run)
+        .put("finishedAt", finishedAt).put("order", order).put("run", run).put("group", group).put("author", author)
 
     companion object {
         private fun JSONObject.str(k: String): String? = if (isNull(k)) null else optString(k)
@@ -70,7 +74,7 @@ data class Job(
                 uri = o.str("uri"), attempts = o.optInt("attempts"), retryAt = o.optLong("retryAt"), engine = o.optInt("engine", 1),
                 scheduledAt = o.optLong("scheduledAt"), wifiOnly = o.optBoolean("wifiOnly"), createdAt = created,
                 startedAt = o.optLong("startedAt"), finishedAt = o.optLong("finishedAt"), order = o.optLong("order", created),
-                run = o.optInt("run"),
+                run = o.optInt("run"), group = o.str("group"), author = o.str("author"),
             )
         }
     }

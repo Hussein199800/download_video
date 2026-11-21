@@ -465,4 +465,55 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('لا أخطاء (الجولة)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
   }
+
+  // ---------- 9) المرحلة 3: ألبوم صور تيك توك ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    await page.evaluate(() => { window.__failImages = [3, 7, 9]; });
+    await page.fill('#url', 'https://www.tiktok.com/@travel.ar/photo/7000000000000000001?n=50');
+    await page.tap('#go');
+    await page.waitForSelector('.album-grid');
+    check('منشور الصور يفتح ألبوماً بعدد صوره', await page.locator('.album-item').count() === 50 && /50 صورة/.test(await text(page)));
+    check('الوصف العربي بأسطره ومكان الحفظ', /رحلة الشتاء/.test(await text(page)) && /سيل ← تيك توك ← رحلة الشتاء \[7000000000000000001\]/.test(await text(page)));
+    check('«نزّل الكل» افتراضياً', /نزّل الكل \(50 صورة\)/.test(await page.locator('#album-add').innerText()));
+    await page.tap('#album-all');
+    check('«إلغاء الكل» يعطّل الزر', await page.locator('#album-add').isDisabled());
+    await page.locator('.album-item[data-i="3"]').tap();
+    await page.locator('.album-item[data-i="8"]').tap();
+    check('اختيار صور بعينها', /نزّل صورتان/.test(await page.locator('#album-add').innerText()));
+    await page.tap('#album-all');
+    check('لا تمرير أفقي في الألبوم', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'album.png') });
+    await page.locator('#album-audio').check();
+    await page.tap('#album-add');
+    await page.waitForSelector('[data-group]');
+    await page.waitForTimeout(1500);
+    const card = await page.locator('[data-group]').innerText();
+    check('بطاقة واحدة للألبوم: حُفظت 48 من 51 وتعذّرت 3', /حُفظت 48 من 51 ملفاً/.test(card) && /تعذّرت 3 ملفات/.test(card), card.replace(/\s+/g, ' '));
+    check('صور الألبوم لا تظهر بطاقة بطاقة', await page.locator('.job:not([data-group])').count() === 0);
+    await page.locator('[data-group] [data-act="إعادة المتعثرة"]').tap();
+    await page.waitForTimeout(1200);
+    check('«إعادة المتعثرة» تنزّل الثلاث فقط ثم تختفي البطاقة', await page.locator('[data-group]').count() === 0);
+    await tabTo(page, 'library');
+    await page.tap('#open-history');
+    check('الصور في مجلد المنشور مرقّمة بترتيب المصدر', /تيك توك ← رحلة الشتاء \[7000000000000000001\] ← 007\.jpg/.test(await text(page)));
+    // الرابط المختصر للمنشور نفسه: كل شيء محفوظ ولا شيء محدد
+    await tabTo(page, 'home');
+    await page.fill('#url', 'https://vm.tiktok.com/ZMabc/?n=50');
+    await page.tap('#go');
+    await page.waitForSelector('.album-grid');
+    await page.waitForTimeout(300);
+    check('الرابط المختصر يعرف أن الصور محفوظة فلا يكررها', await page.locator('.album-item.saved').count() === 50 && await page.locator('#album-add').isDisabled(),
+      `saved=${await page.locator('.album-item.saved').count()} sel=${await page.locator('.album-item.sel').count()} btn=${await page.locator('#album-add').innerText()}`);
+    // صورة حُذفت يدوياً تعود قابلة للتنزيل
+    await page.tap('.topbar .icon-btn[aria-label="رجوع"]');
+    await page.evaluate(() => { window.__goneIndex = [5]; });
+    await page.fill('#url', 'https://vm.tiktok.com/ZMabc/?n=50');
+    await page.tap('#go');
+    await page.waitForSelector('.album-grid');
+    await page.waitForTimeout(300);
+    check('صورة حُذف ملفها تُحدَّد وحدها لإعادة تنزيلها', await page.locator('.album-item.sel').count() === 1 && await page.locator('.album-item[data-i="5"].sel').count() === 1 && /نزّل صورة واحدة/.test(await page.locator('#album-add').innerText()));
+    check('لا أخطاء (الألبوم)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
 };

@@ -34,7 +34,22 @@ function entryUrl(e) {
   return e.url || null;
 }
 
+// ألبوم صور (منشور تيك توك): العناصر بترتيب المصدر
+function parseAlbum(j) {
+  const entries = (j.entries || []).filter((e) => e && Array.isArray(e.urls) && e.urls.length)
+    .map((e) => ({ index: Number(e.index), urls: e.urls, width: e.width || 0, height: e.height || 0 }));
+  return { kind: 'album', id: String(j.id || ''), title: j.title || 'ألبوم', uploader: j.uploader || '', url: j.webpage_url || '', site: j.site || 'other', audio: j.audio || null, count: entries.length, entries };
+}
+
+// اسم مجلد الألبوم: أول سطر من الوصف مقصوراً، ثم [المعرّف] كاملاً دائماً
+export function albumFolder(title, id) {
+  const first = String(title || '').split('\n')[0].replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+  const short = [...first].slice(0, 50).join('').trim();
+  return `${short || 'منشور'} [${id}]`;
+}
+
 export function parseInfo(j) {
+  if (j._type === 'album') return parseAlbum(j);
   if (j._type === 'playlist' || Array.isArray(j.entries)) {
     const entries = (j.entries || []).filter(Boolean).map((e) => {
       const url = entryUrl(e);

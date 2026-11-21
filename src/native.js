@@ -21,6 +21,16 @@ function mockInfo(url) {
   const delay = Number((url.match(/[?&]delay=(\d+)/) || [])[1] || 0);
   if (delay) return new Promise((r) => setTimeout(r, delay)).then(() => mockInfo(url.replace(/[?&]delay=\d+/, '')));
   if (/fail|unsupported/.test(url)) return Promise.reject(new Error('ERROR: Unsupported URL: ' + url));
+  // منشور صور تيك توك: ?n= عدد الصور
+  // الرابط المختصر يفضي إلى المنشور نفسه، فهويته واحدة
+  const short = url.match(/vm\.tiktok\.com\/(\w+)/);
+  const ph = short ? [null, 'travel.ar', '7000000000000000001'] : url.match(/tiktok\.com\/@([\w.]+)\/photo\/(\d+)/);
+  if (ph) {
+    const n = Number((url.match(/[?&]n=(\d+)/) || [])[1] || 6);
+    return Promise.resolve({ json: JSON.stringify({ _type: 'album', id: ph[2], title: 'رحلة الشتاء\nصور من الجبل #سفر', uploader: ph[1], site: 'tiktok',
+      webpage_url: `https://www.tiktok.com/@${ph[1]}/photo/${ph[2]}`, audio: 'https://example.invalid/music.mp3',
+      entries: Array.from({ length: n }, (_, i) => ({ index: i + 1, urls: [`https://example.invalid/img/${i + 1}.jpg`], width: 1080, height: 1440 })) }) });
+  }
   if (/login/.test(url)) return Promise.reject(new Error('ERROR: Sign in to confirm you’re not a bot'));
   if (/list=/.test(url)) {
     return Promise.resolve({ json: JSON.stringify({ _type: 'playlist', id: 'PL1', title: 'قائمة تجريبية', entries: [
@@ -53,8 +63,20 @@ function mockRun(j) {
     cur.pct = Math.min(100, cur.pct + (cur.slow ? 2 : 25));
     cur.total = 52428800; cur.downloaded = Math.round(cur.total * cur.pct / 100);
     cur.speed = 1572864; cur.eta = Math.round((100 - cur.pct) / 25);
+    // window.__failImages: أرقام صور تفشل في أول محاولة (لاختبار إعادة المتعثرة فقط)
+    const failIdx = window.__failImages || [];
+    if (cur.kind === 'image' && failIdx.includes(cur.choice?.index) && !cur.attempts) {
+      clearInterval(t);
+      Object.assign(cur, { state: 'failed', attempts: 1, error: 'HTTP Error 403: Forbidden', finishedAt: Date.now() });
+      return fire('state', { ...cur });
+    }
     if (cur.pct >= 100) {
       clearInterval(t);
+      if (cur.kind === 'image' || cur.kind === 'music') {
+        const name = cur.kind === 'music' ? 'صوت المنشور.mp3' : `${String(cur.choice.index).padStart(3, '0')}.jpg`;
+        Object.assign(cur, { state: 'done', path: `Download/سيل/تيك توك/${cur.folder}/${name}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
+        return fire('state', { ...cur });
+      }
       Object.assign(cur, { state: 'done', path: `Download/سيل/${siteOf(cur.url).folder}/${cur.folder ? cur.folder + '/' : ''}${cur.title}.${cur.kind === 'audio' ? 'mp3' : 'mp4'}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
       fire('state', { ...cur });
     } else fire('progress', { ...cur });
@@ -81,7 +103,12 @@ const mock = {
   move: ({ id, delta }) => { mockReorder(id, (ids, i) => Math.max(0, Math.min(ids.length - 1, i + delta))); return Promise.resolve(); },
   toTop: ({ id }) => { mockReorder(id, () => 0); return Promise.resolve(); },
   startNow: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { scheduledAt: -1, wifiOnly: false, state: 'queued' }); fire('state', { ...j }); } return Promise.resolve(); },
-  retry: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }); mockRun(j); } return Promise.resolve(); },
+  retry: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }); fire('state', { ...j }); mockRun(j); } return Promise.resolve(); },
+  // الملفات التي «حُذفت يدوياً» في الاختبار: window.__gone
+  exists: ({ uris }) => Promise.resolve({ exists: uris.map((u) => {
+    const j = [...mockJobs.values()].find((x) => `mock://${x.id}` === u);
+    return !(window.__gone || []).includes(u) && !(j && (window.__goneIndex || []).includes(j.choice?.index));
+  }) }),
   remove: ({ id }) => { mockJobs.delete(id); return Promise.resolve(); },
   clearFinished: () => { for (const [k, j] of mockJobs) if (j.state === 'failed' || j.state === 'canceled') mockJobs.delete(k); return Promise.resolve(); },
   open: () => Promise.resolve(),
@@ -117,6 +144,7 @@ export const Sayl = {
   startNow: (id) => P.startNow({ id }),
   retry: (id) => P.retry({ id }),
   remove: (id, deleteFile = false) => P.remove({ id, deleteFile }),
+  exists: async (uris) => (await P.exists({ uris })).exists,
   clearFinished: () => P.clearFinished(),
   open: (id) => P.open({ id }),
   share: (id) => P.share({ id }),
