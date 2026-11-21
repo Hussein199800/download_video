@@ -402,6 +402,9 @@ export function libraryView(ctx) {
       h('button', { class: 'btn ghost', 'data-act': 'نسخ الرابط', onclick: async () => { try { await Clip.write(url); toast('نُسخ الرابط', 'ok'); } catch { toast('تعذّر النسخ', 'bad'); } } }, ic('copy'), 'نسخ الرابط'));
   }
 
+  // اسم ملف ZIP: أول سطر من الوصف (أو اسم المجلد) دون المعرّف
+  const albumName = (j, a) => String(j?.title || a.name).split('\n')[0].replace(/\s*\[\d+\]$/, '').trim().slice(0, 60) || 'ألبوم';
+
   // صفحة الألبوم: الوصف والحساب، والصور المتاحة فعلاً بترتيب المصدر
   function openLibAlbum(a) {
     open({ title: 'ألبوم', render: ({ page, back }) => {
@@ -413,6 +416,15 @@ export function libraryView(ctx) {
         postActions(j),
         h('div', { class: 'row-btns' },
           h('button', { class: 'btn ghost', 'data-act': 'مشاركة الكل', onclick: () => Media.share(a.items.map((x) => x.uri)).catch((e) => toast(e.message, 'bad')) }, ic('share'), 'مشاركة الكل'),
+          h('button', { class: 'btn ghost', 'data-act': 'ملف ZIP', onclick: async (e) => {
+            const b = e.currentTarget;
+            b.disabled = true;
+            toast(`جارٍ تجهيز ملف ${iso('ZIP')}…`);
+            try { await Media.shareZip(a.items.map((x) => x.uri), albumName(j, a)); } catch (err) { toast(err.message, 'bad'); }
+            b.disabled = false;
+          } }, ic('share'), 'ملف ZIP')),
+        h('p', { class: 'hint' }, 'بعض التطبيقات تقبل عدداً محدوداً من الصور في المرة الواحدة؛ ملف ZIP يجمعها كلها في ملف واحد بالأسماء نفسها.'),
+        h('div', { class: 'row-btns' },
           h('button', { class: 'btn danger', 'data-act': 'حذف الألبوم', onclick: async () => { await remove(a.items); if (!a.items.some((x) => items.some((y) => y.uri === x.uri))) back(); } }, ic('trash'), 'حذف الألبوم')),
         h('div', { class: 'album-grid lib-album' }, a.items.map((x) => {
           const el = h('button', { class: 'album-item', type: 'button', 'data-uri': x.uri, style: x.width && x.height ? `aspect-ratio:${x.width} / ${x.height}` : 'aspect-ratio:3 / 4', onclick: () => details(x) },

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- تسليم التحديث المحمّل لمثبّت أندرويد، ومشاركة الملفات المنزّلة على أندرويد 9 فما دون -->
+<!-- تسليم التحديث المحمّل لمثبّت أندرويد، ومشاركة ألبوم بملف ZIP، ومشاركة الملفات المنزّلة على أندرويد 9 فما دون -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="updates" path="updates/" />
+    <!-- ملف ZIP مؤقت لمشاركة ألبوم -->
+    <cache-path name="share" path="share/" />
     <external-path name="downloads" path="Download/" />
 </paths>

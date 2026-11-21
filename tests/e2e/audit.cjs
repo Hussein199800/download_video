@@ -536,6 +536,10 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('صفحة الألبوم: الوصف بأسطره والصور بترتيبها', /صور من الجبل/.test(await text(page)) && (await page.locator('.lib-album .album-n').allInnerTexts()).slice(0, 3).join(',') === '001,002,003');
     await page.tap('[data-act="فتح المنشور"]');
     check('«فتح المنشور» يفتح الرابط الأصلي', await page.evaluate(() => window.__opened) === 'https://www.tiktok.com/@travel.ar/photo/7000000000000000001');
+    await page.tap('[data-act="ملف ZIP"]');
+    await page.waitForTimeout(150);
+    const zip = await page.evaluate(() => window.__zip);
+    check('«ملف ZIP» يجمع صور الألبوم الخمسين باسم الوصف', zip && zip.uris.length === 50 && zip.name === 'رحلة الشتاء', JSON.stringify(zip && { n: zip.uris.length, name: zip.name }));
     await shot(page, { path: path.join(OUT, 'library-album.png'), fullPage: true });
     // حذف صورة: العدد يعكس المتاح
     await page.locator('.lib-album .album-item').nth(4).tap();
