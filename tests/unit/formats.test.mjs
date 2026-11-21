@@ -85,3 +85,23 @@ test('قائمة مدخلاتها روابط بلا عنوان url تُبنى م
   const p = parseInfo({ _type: 'playlist', id: 'P', title: 'T', webpage_url: 'https://www.youtube.com/playlist?list=P', entries: [{ id: 'z9', title: 'x', ie_key: 'Youtube' }] });
   assert.equal(p.entries[0].url, 'https://www.youtube.com/watch?v=z9');
 });
+
+test('الترجمات: اليدوية والتلقائية الأصلية والعربية، والعربية أولاً', async () => {
+  const { subtitleList } = await import('../../src/formats.js');
+  const l = subtitleList({ subtitles: { fr: [], ar: [], live_chat: [] }, automatic_captions: { 'en-orig': [], en: [], ar: [], de: [], ja: [] } });
+  assert.deepEqual(l.map((x) => [x.lang, x.auto]), [['ar', false], ['fr', false], ['en-orig', true]]);
+  assert.match(l[2].label, /تلقائية/);
+  assert.deepEqual(subtitleList({}), []);
+});
+
+test('أوامر الترجمة: ملف SRT أو مدمجة، وللفيديو فقط', async () => {
+  const { buildArgs } = await import('../../src/formats.js');
+  const a = buildArgs({ type: 'video', height: 720, subs: { lang: 'ar', auto: false, embed: false } });
+  assert.ok(a.join(' ').includes('--write-subs --sub-langs ar --convert-subs srt'));
+  assert.ok(!a.includes('--embed-subs'));
+  const b = buildArgs({ type: 'video', height: 'best', subs: { lang: 'en-orig', auto: true, embed: true } });
+  assert.ok(b.includes('--write-auto-subs') && b.includes('--embed-subs') && b.includes('en-orig'));
+  assert.ok(!buildArgs({ type: 'audio', format: 'mp3', subs: { lang: 'ar' } }).includes('--sub-langs'));
+  // لا شيء يغيّر مكان الحفظ
+  assert.ok(!b.some((x) => ['-o', '-P', '--exec', '--paths', '--output'].includes(x)));
+});

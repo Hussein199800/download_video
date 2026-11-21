@@ -219,6 +219,31 @@ class MediaPlugin : Plugin() {
         try { activity.startActivity(Intent.createChooser(send, "مشاركة").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); call.resolve() } catch (e: Exception) { call.reject("تعذّرت المشاركة") }
     }
 
+    /** ألبوم كاملاً في ملف ZIP واحد (في ذاكرة التطبيق المؤقتة) ثم نافذة المشاركة */
+    @PluginMethod
+    fun shareZip(call: PluginCall) {
+        val uris = call.getArray("uris")?.toList<String>()?.map { Uri.parse(it) }.orEmpty()
+        if (uris.isEmpty()) return call.reject("لم يُختر ملف")
+        val base = (call.getString("name") ?: "ألبوم").replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().take(80).ifEmpty { "ألبوم" }
+        Thread {
+            try {
+                val dir = java.io.File(context.cacheDir, "share").apply { deleteRecursively(); mkdirs() }
+                val file = java.io.File(dir, "$base.zip")
+                val n = file.outputStream().use { out ->
+                    Zipper.write(out, uris.map { u -> MediaIO.meta(context, u).name to { runCatching { context.contentResolver.openInputStream(u) }.getOrNull() } })
+                }
+                if (n == 0) { file.delete(); return@Thread call.reject("الملفات لم تعد موجودة") }
+                val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                val send = Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uri).setType("application/zip").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                activity.runOnUiThread {
+                    try { activity.startActivity(Intent.createChooser(send, "مشاركة").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); call.resolve(JSObject().put("count", n).put("size", file.length())) } catch (e: Exception) { call.reject("تعذّرت المشاركة") }
+                }
+            } catch (e: Exception) {
+                call.reject("تعذّر تجهيز ملف ZIP: ${e.message ?: ""}".trim())
+            }
+        }.start()
+    }
+
     // ---------- مكان الحفظ ----------
     @PluginMethod
     fun outDir(call: PluginCall) {

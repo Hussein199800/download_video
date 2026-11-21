@@ -4,6 +4,18 @@ export const REPO = 'Hussein199800/download_video';
 const LATEST = `https://api.github.com/repos/${REPO}/releases/latest`;
 export const DOWNLOAD_PREFIX = `https://github.com/${REPO}/releases/download/`;
 export const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
+// رابط ثابت لأحدث نسخة (arm64-v8a) يعمل لكل إصدار
+export const STABLE_APK = `https://github.com/${REPO}/releases/latest/download/sayl.apk`;
+
+// ملاحظات الإصدار نصاً عادياً: بلا عناوين Markdown ولا ** ، والقوائم بنقاط
+export function plainNotes(md) {
+  return String(md || '')
+    .replace(/^#{1,6}\s+.*$/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/^(\s*)[-*]\s+/gm, (m, sp) => `${sp.length >= 2 ? '   ' : ''}• `)
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 export function parseVer(s) {
   const m = String(s || '').match(/(\d+)\.(\d+)(?:\.(\d+))?/);

@@ -9,6 +9,7 @@ const SIZES = {
   'لوحي عمودي': { width: 800, height: 1280 },
   'لوحي أفقي': { width: 1280, height: 800 },
 };
+const VER_RE = require('../../package.json').version.replace(/\./g, '\\.');
 const LONG = 'https://x.com/Moath1531Moath/status/2118446057294348573?s=46&t=a03kdI7IkNZS-u7THHs-very-long-tracking-parameter&s=19';
 
 module.exports = async function audit({ browser, base, newPage, check, shot, text, OUT }) {
@@ -191,6 +192,9 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('الفقاعة لا تتجاوز عرض الشاشة مع رابط طويل جداً', bub.x >= 0 && bub.x + bub.width <= 320 && !(await wide(page)), JSON.stringify(bub));
     await shot(page, { path: path.join(OUT, 'clip-bubble-320.png') });
     await page.tap('#clip-go');
+    await page.waitForSelector('.quick-sheet');
+    check('نافذة الطرق برابط طويل على 320 بلا تمرير أفقي', !(await wide(page)));
+    await page.tap('#quick-custom');
     await page.waitForSelector('.preview');
     check('«نزّل» من الفقاعة يقرأ الرابط', await page.inputValue('#url') === LONG);
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -371,6 +375,275 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await tabTo(page, 'library');
     check('إعدادات المكتبة (العرض والفرز) تبقى بعد إعادة التشغيل', await page.locator('.lib-item.list').count() > 0 && await page.inputValue('#lib-sort') === 'size');
     check('لا أخطاء (المكتبة)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 8) المرحلة 1: سباق المعاينة، وحفظ الحالات الجزئي، والجولة و«ما الجديد» ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    const read = async (u) => { await page.fill('#url', u); await page.tap('#go'); };
+    // رد الرابط الأول يصل بعد الثاني: تبقى معاينة الثاني وزرّه مرتبطاً به
+    await read('https://youtu.be/a1?delay=900&title=الأول');
+    await read('https://youtu.be/b2?delay=100&title=الثاني');
+    await page.waitForTimeout(1300);
+    const pv = await page.locator('.result').innerText();
+    check('رد قديم وصل متأخراً لا يستبدل معاينة الرابط الحالي', /الثاني/.test(pv) && !/الأول/.test(pv), pv.slice(0, 120));
+    check('زر «نزّل» مرتبط بالرابط المعروض', /b2/.test(await page.getAttribute('#dl', 'data-url')));
+    // الأول فشل متأخراً: لا تظهر بطاقة خطئه فوق معاينة الثاني
+    await read('https://youtu.be/fail1?delay=700');
+    await read('https://youtu.be/c3?delay=50&title=الثالث');
+    await page.waitForTimeout(1000);
+    check('فشل متأخر لطلب قديم لا يغطي المعاينة الحالية', await page.locator('.err-card').count() === 0 && /الثالث/.test(await page.locator('.result').innerText()));
+    // الأول قائمة تشغيل وصلت متأخرة: لا تُفتح صفحتها
+    await read('https://www.youtube.com/playlist?list=PL1&delay=700');
+    await read('https://youtu.be/d4?delay=50&title=الرابع');
+    await page.waitForTimeout(1000);
+    check('قائمة تشغيل وصلت متأخرة لا تفتح صفحتها فوق الرابط الحالي', !(await page.locator('.pl-list').count()) && /الرابع/.test(await text(page)));
+    // تغيير الرابط يزيل المعاينة القديمة
+    await page.locator('#url').fill('https://youtu.be/other');
+    await page.waitForTimeout(100);
+    check('تغيير الرابط يبطل المعاينة القديمة', await page.locator('.preview').count() === 0);
+    // مغادرة الشاشة أثناء قراءة قائمة: لا تُفتح القائمة بعد العودة
+    await read('https://www.youtube.com/playlist?list=PL1&delay=600');
+    await tabTo(page, 'jobs');
+    await page.waitForTimeout(900);
+    check('مغادرة الرئيسية تبطل القراءة الجارية', !(await page.locator('.pl-list').count()) && /التنزيلات/.test(await text(page)));
+
+    // حالات واتساب: ثلاث محددة تختفي الثالثة أثناء الحفظ
+    await tabTo(page, 'home');
+    await page.tap('#open-statuses');
+    await page.tap('#grant');
+    await page.waitForSelector('.st-grid .st-item');
+    await page.evaluate(() => window.__mockStatus.vanish('a3.jpg'));
+    for (const n of [0, 1, 2]) await page.locator('.st-item .st-check').nth(n).tap();
+    await page.tap('#st-save');
+    await page.waitForTimeout(400);
+    const t1 = await page.locator('.toast').innerText();
+    check('الحفظ الجزئي يذكر الناجح والمتعثر', /حُفظت حالتان/.test(t1) && /تعذّرت حالة واحدة/.test(t1), t1);
+    check('الناجحتان معلّمتان والمختفية أُزيلت من القائمة', await page.locator('.st-item.saved').count() === 2 && await page.locator('.st-item').count() === 3);
+    await page.tap('#st-all');
+    await page.waitForTimeout(400);
+    check('«احفظ الكل» بعد التعثر يحفظ غير المحفوظ فقط', /حُفظت الحالة/.test(await page.locator('.toast').innerText()) && await page.locator('.st-item.saved').count() === 3);
+    check('لا أخطاء (المرحلة 1)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+  {
+    // أول تثبيت: الجولة
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 320'], touch: true, intro: true });
+    await page.waitForSelector('#tour');
+    check('الجولة تظهر عند أول تثبيت', /أهلاً بك في سَيْل/.test(await page.locator('#tour').innerText()));
+    check('لا تمرير أفقي في الجولة على 320', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'tour-320.png') });
+    let steps = 1;
+    while (await page.locator('#tour-skip').count()) { await page.tap('#tour-next'); steps++; if (steps > 10) break; }
+    check('الجولة ست خطوات، والأخيرة بلا «تخطي» وزرها «ابدأ»', steps === 6 && /ابدأ/.test(await page.locator('#tour-next').innerText()), String(steps));
+    await page.tap('#tour-prev');
+    check('«السابق» يعود خطوة', /أدوات الوسائط/.test(await page.locator('#tour').innerText()));
+    await page.tap('#tour-skip');
+    check('«تخطي» يغلق الجولة', await page.locator('#tour').count() === 0);
+    await page.reload();
+    await page.waitForSelector('.tabbar');
+    await page.waitForTimeout(400);
+    check('الجولة لا تتكرر بعد إغلاقها، ولا «ما الجديد» معها', await page.locator('#tour').count() === 0 && await page.locator('#whats-new').count() === 0);
+    await tabTo(page, 'more');
+    await page.tap('#open-tour');
+    check('الجولة تُعاد من «المزيد»', await page.locator('#tour').count() === 1);
+    await page.keyboard.press('Escape');
+    check('زر الرجوع يغلق الجولة', await page.locator('#tour').count() === 0);
+    await page.context().close();
+  }
+  {
+    // مستخدم من إصدار سابق: «ما الجديد» بدل الجولة، مرة واحدة
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true, intro: true, storage: { 'sayl.settings': '{"theme":"dark"}' } });
+    await page.waitForSelector('#whats-new');
+    check('بعد التحديث يظهر «ما الجديد» لا الجولة', await page.locator('#tour').count() === 0 && new RegExp(VER_RE).test(await page.locator('#whats-new').innerText()));
+    await shot(page, { path: path.join(OUT, 'whats-new.png') });
+    await page.tap('#wn-tour');
+    check('«جولة في التطبيق» من «ما الجديد» تفتح الجولة', await page.locator('#tour').count() === 1);
+    await page.tap('#tour-skip');
+    await page.reload();
+    await page.waitForSelector('.tabbar');
+    await page.waitForTimeout(400);
+    check('«ما الجديد» يظهر مرة واحدة فقط', await page.locator('#whats-new').count() === 0);
+    check('لا أخطاء (الجولة)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 9) المرحلة 3: ألبوم صور تيك توك ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    await page.evaluate(() => { window.__failImages = [3, 7, 9]; });
+    await page.fill('#url', 'https://www.tiktok.com/@travel.ar/photo/7000000000000000001?n=50');
+    await page.tap('#go');
+    await page.waitForSelector('.album-grid');
+    check('منشور الصور يفتح ألبوماً بعدد صوره', await page.locator('.album-item').count() === 50 && /50 صورة/.test(await text(page)));
+    check('الوصف العربي بأسطره ومكان الحفظ', /رحلة الشتاء/.test(await text(page)) && /سيل ← تيك توك ← رحلة الشتاء \[7000000000000000001\]/.test(await text(page)));
+    check('«نزّل الكل» افتراضياً', /نزّل الكل \(50 صورة\)/.test(await page.locator('#album-add').innerText()));
+    await page.tap('#album-all');
+    check('«إلغاء الكل» يعطّل الزر', await page.locator('#album-add').isDisabled());
+    await page.locator('.album-item[data-i="3"]').tap();
+    await page.locator('.album-item[data-i="8"]').tap();
+    check('اختيار صور بعينها', /نزّل صورتان/.test(await page.locator('#album-add').innerText()));
+    await page.tap('#album-all');
+    check('لا تمرير أفقي في الألبوم', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'album.png') });
+    await page.locator('#album-audio').check();
+    await page.tap('#album-add');
+    await page.waitForSelector('[data-group]');
+    await page.waitForTimeout(1500);
+    const card = await page.locator('[data-group]').innerText();
+    check('بطاقة واحدة للألبوم: حُفظت 48 من 51 وتعذّرت 3', /حُفظت 48 من 51 ملفاً/.test(card) && /تعذّرت 3 ملفات/.test(card), card.replace(/\s+/g, ' '));
+    check('صور الألبوم لا تظهر بطاقة بطاقة', await page.locator('.job:not([data-group])').count() === 0);
+    await page.locator('[data-group] [data-act="إعادة المتعثرة"]').tap();
+    await page.waitForTimeout(1200);
+    check('«إعادة المتعثرة» تنزّل الثلاث فقط ثم تختفي البطاقة', await page.locator('[data-group]').count() === 0);
+    await tabTo(page, 'library');
+    await page.tap('#open-history');
+    check('الصور في مجلد المنشور مرقّمة بترتيب المصدر', /تيك توك ← رحلة الشتاء \[7000000000000000001\] ← 007\.jpg/.test(await text(page)));
+    // الرابط المختصر للمنشور نفسه: كل شيء محفوظ ولا شيء محدد
+    await tabTo(page, 'home');
+    await page.fill('#url', 'https://vm.tiktok.com/ZMabc/?n=50');
+    await page.tap('#go');
+    await page.waitForSelector('.album-grid');
+    await page.waitForTimeout(300);
+    check('الرابط المختصر يعرف أن الصور محفوظة فلا يكررها', await page.locator('.album-item.saved').count() === 50 && await page.locator('#album-add').isDisabled(),
+      `saved=${await page.locator('.album-item.saved').count()} sel=${await page.locator('.album-item.sel').count()} btn=${await page.locator('#album-add').innerText()}`);
+    // صورة حُذفت يدوياً تعود قابلة للتنزيل
+    await page.tap('.topbar .icon-btn[aria-label="رجوع"]');
+    await page.evaluate(() => { window.__goneIndex = [5]; });
+    await page.fill('#url', 'https://vm.tiktok.com/ZMabc/?n=50');
+    await page.tap('#go');
+    await page.waitForSelector('.album-grid');
+    await page.waitForTimeout(300);
+    check('صورة حُذف ملفها تُحدَّد وحدها لإعادة تنزيلها', await page.locator('.album-item.sel').count() === 1 && await page.locator('.album-item[data-i="5"].sel').count() === 1 && /نزّل صورة واحدة/.test(await page.locator('#album-add').innerText()));
+    // المرحلة 4: الألبوم في المكتبة بطاقة واحدة، والبحث في الوصف، وفتح المنشور
+    await page.tap('.topbar .icon-btn[aria-label="رجوع"]');
+    await tabTo(page, 'library');
+    await page.waitForSelector('[data-album]');
+    const albumCardText = await page.locator('[data-album]').innerText();
+    check('صور المنشور بطاقة ألبوم واحدة بعددها', await page.locator('[data-album]').count() === 1 && /50 صورة/.test(albumCardText), albumCardText.replace(/\s+/g, ' '));
+    await page.locator('#lib-q').tap();
+    await page.locator('#lib-q').pressSequentially('سفر', { delay: 40 });
+    await page.waitForTimeout(250);
+    // يظهر الألبوم وصوت المنشور نفسه فقط
+    check('البحث بكلمة من وصف المنشور يجد الألبوم وصوته', await page.locator('[data-album]').count() === 1
+      && (await page.locator('.lib-item:not([data-album])').allInnerTexts()).every((t) => /صوت المنشور/.test(t)),
+      (await page.locator('.lib-list').innerText()).replace(/\s+/g, ' ').slice(0, 200));
+    await page.locator('#lib-q').fill('');
+    await page.waitForTimeout(250);
+    await page.tap('[data-album]');
+    await page.waitForSelector('.lib-album');
+    check('صفحة الألبوم: الوصف بأسطره والصور بترتيبها', /صور من الجبل/.test(await text(page)) && (await page.locator('.lib-album .album-n').allInnerTexts()).slice(0, 3).join(',') === '001,002,003');
+    await page.tap('[data-act="فتح المنشور"]');
+    check('«فتح المنشور» يفتح الرابط الأصلي', await page.evaluate(() => window.__opened) === 'https://www.tiktok.com/@travel.ar/photo/7000000000000000001');
+    await page.tap('[data-act="ملف ZIP"]');
+    await page.waitForTimeout(150);
+    const zip = await page.evaluate(() => window.__zip);
+    check('«ملف ZIP» يجمع صور الألبوم الخمسين باسم الوصف', zip && zip.uris.length === 50 && zip.name === 'رحلة الشتاء', JSON.stringify(zip && { n: zip.uris.length, name: zip.name }));
+    await shot(page, { path: path.join(OUT, 'library-album.png'), fullPage: true });
+    // حذف صورة: العدد يعكس المتاح
+    await page.locator('.lib-album .album-item').nth(4).tap();
+    await page.locator('.sheet [data-act="حذف"]').tap();
+    await page.locator('.sheet .btn.danger').tap();
+    await page.waitForTimeout(400);
+    await page.tap('.topbar .icon-btn[aria-label="رجوع"]');
+    await page.waitForTimeout(300);
+    check('بعد حذف صورة يعرض الألبوم 49', /49 صورة/.test(await page.locator('[data-album]').innerText()));
+    check('لا أخطاء (الألبوم)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 10) المرحلتان 6 و7: جزء من المقطع، ونسخة للواتساب، والترجمة ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    await page.fill('#url', 'https://www.youtube.com/watch?v=clip1&title=' + encodeURIComponent('درس القص'));
+    await page.tap('#go');
+    await page.waitForSelector('#extras');
+    check('الخيارات الإضافية مطوية افتراضياً', !(await page.locator('#extras').evaluate((d) => d.open)));
+    await page.tap('#extras summary');
+    const opts = await page.locator('#subs-lang option').allInnerTexts();
+    check('لغات الترجمة: العربية أولاً واليدوية قبل التلقائية', opts[1] === 'العربية' && opts.some((o) => /الإنجليزية · تلقائية/.test(o)) && !opts.some((o) => /الألمانية/.test(o)), opts.join(' | '));
+    await page.locator('label:has(#clip-on)').tap();
+    check('حقلا البداية والنهاية يظهران بمدة المقطع', await page.locator('#clip-end').inputValue() === '4:05');
+    await page.locator('#clip-end').fill('');
+    await page.locator('#clip-end').type('٥:٠٠');
+    check('نهاية بعد آخر المقطع مرفوضة برسالة واضحة', /بعد آخر المقطع \(4:05\)/.test(await page.locator('#clip-err').innerText()));
+    await page.tap('#dl');
+    check('لا يُضاف للطابور بجزء غير صالح', await page.evaluate(() => document.querySelector('.toast')?.textContent || '').then((t) => /بعد آخر المقطع/.test(t)));
+    await page.locator('#clip-start').fill('');
+    await page.locator('#clip-start').type('١:٣٠');
+    await page.locator('#clip-end').fill('');
+    await page.locator('#clip-end').type('٢:٠٥٫٥');
+    check('الأرقام العربية والفاصلة «٫» مقبولة', (await page.locator('#clip-err').innerText()) === '');
+    await page.locator('label:has(#wa-copy)').tap();
+    await page.locator('#subs-lang').selectOption('ar');
+    check('طريقة الترجمة تظهر بعد اختيار اللغة', await page.locator('#subs-mode-box').isVisible());
+    check('لا تمرير أفقي في الخيارات الإضافية', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'extras.png'), fullPage: true });
+    // الصوت: لا ضغط للواتساب ولا ترجمة، والقص متاح
+    await page.locator('.picker .seg button', { hasText: 'صوت' }).tap();
+    check('للصوت: القص فقط', await page.locator('#clip-on').isVisible() && !(await page.locator('#wa-copy').isVisible()) && !(await page.locator('#subs-lang').isVisible()));
+    await page.locator('.picker .seg button', { hasText: 'فيديو' }).tap();
+    await page.tap('#dl');
+    await page.waitForTimeout(3500);
+    await tabTo(page, 'library');
+    await page.waitForSelector('.lib-item');
+    await page.locator('#lib-q').fill('درس القص');
+    await page.waitForTimeout(300);
+    const names = await page.locator('.lib-item').allInnerTexts();
+    const flat = names.join(' | ').replace(/\s+/g, ' ');
+    check('الجزء محفوظ بجانب الأصل والكامل حُذف', /درس القص \(مقطع\)\.mp4/.test(flat) && !names.some((n) => /درس القص\.mp4/.test(n)), flat.slice(0, 300));
+    check('ونسخة الواتساب من الجزء نفسه', /درس القص \(مقطع\) \(مضغوط\)\.mp4/.test(flat));
+    check('كلاهما في مجلد المنصة لا في «معالَج»', !/معالَج/.test(flat), flat.slice(0, 300));
+    await page.locator('.lib-item', { hasText: 'درس القص (مقطع).mp4' }).first().tap();
+    await page.waitForSelector('.sheet .kv');
+    const det = await page.locator('.sheet').innerText();
+    check('التفاصيل: الترجمة العربية ملف SRT بجانبه', /الترجمة[\s\S]*العربية · ملف \u2068?SRT\u2069? بجانبه/.test(det), det.replace(/\s+/g, ' ').slice(0, 300));
+    check('لا أخطاء (الخيارات الإضافية)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 11) المرحلة 5: «احفظ بطريقتي» عند مشاركة رابط ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    await page.evaluate(() => window.__share('شاهد هذا https://www.youtube.com/watch?v=q1&title=' + encodeURIComponent('مشاركة سريعة')));
+    await page.waitForSelector('.quick-sheet');
+    const items = await page.locator('.quick-sheet .lcard').allInnerTexts();
+    check('النافذة تعرض الطرق الثلاث الافتراضية', items.length === 3 && /فيديو 720p \+ نسخة للواتساب/.test(items[1]), items.join(' | '));
+    check('لا تمرير أفقي في نافذة الطرق', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'quick-sheet.png') });
+    await page.tap('#quick-1');
+    await page.waitForTimeout(3500);
+    await tabTo(page, 'library');
+    await page.waitForSelector('.lib-item');
+    await page.locator('#lib-q').fill('مشاركة سريعة');
+    await page.waitForTimeout(300);
+    const flat = (await page.locator('.lib-item').allInnerTexts()).join(' | ').replace(/\s+/g, ' ');
+    check('بلمسة واحدة: الفيديو ونسخته للواتساب', /مشاركة سريعة\.mp4/.test(flat) && /مشاركة سريعة \(مضغوط\)\.mp4/.test(flat), flat.slice(0, 300));
+    // «اختيار مفصّل» يفتح المعاينة دون إضافة
+    await page.evaluate(() => window.__share('https://www.youtube.com/watch?v=q2'));
+    await page.waitForSelector('.quick-sheet');
+    await page.tap('#quick-custom');
+    await page.waitForSelector('#dl');
+    check('«اختيار مفصّل» يعرض المعاينة', await page.locator('#extras').count() === 1);
+    // تعديل الطرق: حذف وإضافة، والإيقاف يذهب للمعاينة مباشرة
+    await tabTo(page, 'more');
+    await tap(page, '#open-settings');
+    await page.locator('#quick-list [data-del="0"]').scrollIntoViewIfNeeded();
+    await page.tap('#quick-list [data-del="0"]');
+    await tap(page, '#quick-add');
+    await page.locator('.sheet .seg button', { hasText: 'صوت' }).tap();
+    await page.locator('.sheet .chips-sel button', { hasText: 'M4A' }).tap();
+    await page.tap('#quick-save');
+    const rows = await page.locator('#quick-list .quick-row').allInnerTexts();
+    check('حذف طريقة وإضافة «صوت M4A»', rows.length === 3 && /صوت M4A/.test(rows[2]) && !rows.some((r) => /أفضل جودة/.test(r)), rows.join(' | '));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('sayl.settings')).quick.length);
+    check('الطرق محفوظة', saved === 3);
+    await page.locator('label:has(input.sw)', { hasText: 'اسألني عند مشاركة رابط' }).tap();
+    await page.evaluate(() => window.__share('https://www.youtube.com/watch?v=q3'));
+    await page.waitForSelector('#dl');
+    check('بإيقافها يذهب الرابط إلى المعاينة مباشرة', await page.locator('.quick-sheet').count() === 0);
+    check('لا أخطاء («احفظ بطريقتي»)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
   }
 };

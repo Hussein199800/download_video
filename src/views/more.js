@@ -6,9 +6,12 @@ import { getSettings, setSettings, getMeta, setMeta } from '../store.js';
 import { applyTheme } from '../theme.js';
 import { readLog, clearLog, logError } from '../state.js';
 import { redact } from '../errors.js';
-import { fetchLatest, isNewer, shouldCheck, RELEASES_PAGE } from '../update.js';
+import { fetchLatest, isNewer, shouldCheck, RELEASES_PAGE, STABLE_APK, plainNotes } from '../update.js';
 import { VERSION } from '../version.js';
 import { CHANGELOG } from '../changelog.js';
+import { openTour } from './tour.js';
+import { choicePicker } from './choice.js';
+import { quickLabel, quickHint, sameQuick, MAX_QUICK } from '../quick.js';
 
 export const ABOUT_NAME = 'حسين محمد علي الطويل';
 export const ABOUT_DUA = 'اللهم اغفر له ولوالديه، واجعل هذا العمل صدقة جارية في ميزان حسناتهم.';
@@ -43,7 +46,7 @@ function updateSheet(rel) {
   const btn = h('button', { class: 'btn primary wide' }, ic('cloud'), `نزّل الإصدار ${rel.version}${rel.size ? ` (${fmtBytes(rel.size)})` : ''}`);
   const close = sheet(
     h('h3', {}, `إصدار جديد: ${rel.version}`),
-    rel.notes && h('p', { class: 'muted', style: 'white-space:pre-line' }, rel.notes),
+    rel.notes && h('p', { class: 'muted', style: 'white-space:pre-line' }, plainNotes(rel.notes)),
     h('div', { class: 'bar c-indigo' }, bar),
     btn,
     h('button', { class: 'btn ghost wide', onclick: () => close() }, 'لاحقاً'));
@@ -60,9 +63,18 @@ function updateSheet(rel) {
       btn.textContent = 'ثبّت التحديث';
       btn.onclick = () => AppUpdater.install().catch((e) => toast(e.message, 'bad'));
     } catch (e) {
-      toast(e.message || 'تعذّر التحديث', 'bad');
       btn.disabled = false;
       btn.textContent = 'أعد المحاولة';
+      // نسخة مثبّتة بمفتاح آخر (تجريبية غالباً): أندرويد يرفض التحديث فوقها، فالحل تثبيت جديد
+      if (/توقيع/.test(e.message || '')) {
+        close();
+        const c2 = sheet(h('h3', {}, 'لا يمكن التحديث فوق هذه النسخة'),
+          h('p', { class: 'muted' }, 'النسخة المثبّتة على هاتفك موقّعة بمفتاح مختلف عن نسخ الإصدار الرسمية (غالباً نسخة تجريبية)، وأندرويد لا يقبل تحديثاً بتوقيع مختلف حمايةً لك.\nالحل مرة واحدة: احذف سَيْل، ثم ثبّت أحدث نسخة من الرابط. ملفاتك في مجلد التنزيلات ← سيل تبقى كما هي، ويُفقد السجل والإعدادات فقط. بعدها تصل التحديثات من داخل التطبيق عادياً.'),
+          h('button', { class: 'btn primary wide', onclick: () => { Sayl.openUrl(STABLE_APK).catch((e) => toast(e.message, 'bad')); c2(); } }, ic('download'), 'فتح رابط التحميل'),
+          h('button', { class: 'btn ghost wide', onclick: () => c2() }, 'إغلاق'));
+        return;
+      }
+      toast(e.message || 'تعذّر التحديث', 'bad');
     } finally {
       l?.remove?.();
     }
@@ -108,6 +120,40 @@ function setting(title, hint, ...controls) {
   const el = h('div', { class: 'set-col' }, h('b', {}, title, mark), hint && h('small', {}, hint), ...controls);
   el.saved = mark.flash;
   return el;
+}
+
+// تعديل طرق «احفظ بطريقتي»: حذف، وإضافة بالاختيار نفسه الذي في المعاينة
+function quickEditor(set) {
+  const row = setting('طرقك الجاهزة', `حتى ${count(MAX_QUICK, W.way)}، بالترتيب الذي تظهر به.`);
+  const list = h('div', { class: 'quick-list', id: 'quick-list' });
+  const add = h('button', { class: 'btn sm primary', id: 'quick-add' }, ic('plus'), 'أضف طريقة');
+  const draw = () => {
+    const q = getSettings().quick;
+    list.replaceChildren(...(q.length ? q.map((p, i) => h('div', { class: 'quick-row' },
+      ic(p.type === 'audio' ? 'audio' : 'video', `l-ic ${p.type === 'audio' ? 'c-violet' : 'c-sky'}`),
+      h('span', { class: 'l-txt' }, h('b', {}, quickLabel(p)), h('small', {}, quickHint(p))),
+      h('button', { class: 'icon-btn', 'aria-label': `احذف ${quickLabel(p)}`, 'data-del': String(i), html: ic('trash').innerHTML,
+        onclick: () => { set({ quick: q.filter((_, j) => j !== i) }, row); draw(); } }))) : [h('p', { class: 'hint' }, 'لا طرق؛ أضف واحدة على الأقل لتظهر النافذة.')]));
+    add.disabled = q.length >= MAX_QUICK;
+  };
+  add.onclick = () => {
+    const picker = choicePicker({ type: 'video', onType: (k) => { waRow.hidden = k !== 'video'; } });
+    const wa = h('input', { type: 'checkbox', class: 'sw', id: 'quick-wa' });
+    const waRow = h('label', { class: 'set-row' }, h('span', {}, 'ونسخة مضغوطة للواتساب', h('small', {}, 'نسخة إضافية أصغر بترميز H.264 تُرسل أسرع.')), wa);
+    const close = sheet(h('h3', {}, 'طريقة جديدة'), picker.el, waRow,
+      h('button', { class: 'btn primary wide', id: 'quick-save', onclick: () => {
+        const c = picker.choice();
+        const p = c.type === 'audio' ? c : { ...c, ...(wa.checked && { wa: true }) };
+        const q = getSettings().quick;
+        if (q.some((x) => sameQuick(x, p))) { toast('هذه الطريقة موجودة', 'bad'); return; }
+        set({ quick: [...q, p] }, row);
+        close();
+        draw();
+      } }, 'أضف'));
+  };
+  row.append(list, h('div', { class: 'row-gap' }, add));
+  draw();
+  return row;
 }
 
 function settingsPage({ page }) {
@@ -156,11 +202,15 @@ function settingsPage({ page }) {
       retryRow = setting('إعادة المحاولة تلقائياً', 'عند فشل مؤقت يعيد سَيْل المحاولة وحده بعد 30 ثانية ثم دقيقتين ثم 10 دقائق، ويكمل من حيث توقف. انقطاع الإنترنت لا يُحسب محاولة.',
         chips([{ value: 0, label: 'بلا' }, ...[3, 5, 10].map((n) => ({ value: n, label: count(n, W.time) }))], s.retries, (v) => { set({ retries: v }, retryRow); syncNative(); })),
       windowRow(s, set),
-      h('div', { class: 'set-row' }, h('span', {}, 'مكان الحفظ', h('small', {}, 'مجلد التنزيلات في الهاتف، ولكل قائمة تشغيل مجلد باسمها.')), h('b', { class: 'ltr' }, 'Download/سيل'))),
+      h('div', { class: 'set-row' }, h('span', {}, 'مكان الحفظ', h('small', {}, 'مجلد التنزيلات ← سيل، وفيه مجلد لكل منصة (يوتيوب، تيك توك، فيسبوك…)، ولكل قائمة تشغيل مجلد باسمها داخل منصتها.')), h('b', { class: 'ltr' }, 'Download/سيل'))),
     h('h3', { class: 'sec-h' }, 'الرابط المنسوخ'),
     h('div', { class: 'card form' },
       sw('اقتراح الرابط المنسوخ', 'عند فتح سَيْل أو العودة إليه تظهر فقاعة صغيرة بالرابط الموجود في الحافظة لتنزيله بلمسة. أندرويد لا يسمح بقراءة الحافظة والتطبيق في الخلفية.', 'clipboard'),
       h('div', { class: 'set-row' }, h('span', {}, 'بلاطة «نزّل المنسوخ»', h('small', {}, 'في الإعدادات السريعة: انسخ الرابط من أي تطبيق ثم اسحب الشريط واضغطها، فيفتح سَيْل الرابط مباشرة. وأيضاً بالضغط المطوّل على أيقونة سَيْل.')), tileBtn)),
+    h('h3', { class: 'sec-h' }, 'احفظ بطريقتي'),
+    h('div', { class: 'card form' },
+      sw('اسألني عند مشاركة رابط', 'عند مشاركة رابط إلى سَيْل أو فتح المنسوخ تظهر طرقك الجاهزة فيُنزَّل بلمسة، و«اختيار مفصّل» للمعاينة الكاملة. أطفئه لتذهب إلى المعاينة مباشرة.', 'shareAsk'),
+      quickEditor(set)),
     h('h3', { class: 'sec-h' }, 'أدوات الوسائط'),
     h('div', { class: 'card form' },
       outRow = setting('مكان الملفات الناتجة', 'التحويل والضغط والقص والدمج تحفظ ملفاً جديداً هنا، ولا تستبدل الأصل أبداً.',
@@ -283,6 +333,7 @@ export function moreView({ page, open }) {
     h('h3', { class: 'sec-h' }, 'التطبيق'),
     h('div', { class: 'lcards' },
       check,
+      card('open-tour', { color: 'c-sky', icon: 'book', title: 'جولة في التطبيق', sub: 'كيف تستخدم سَيْل في دقيقة', onClick: () => openTour() }),
       card('open-changes', { color: 'c-amber', icon: 'star', title: 'ما الجديد', sub: 'ما أضيف في كل إصدار', onClick: sub('ما الجديد', changesPage) }),
       card('share-app', { color: 'c-violet', icon: 'share', title: 'مشاركة التطبيق', sub: 'أرسل رابط التحميل لمن تحب', onClick: async () => {
         try {

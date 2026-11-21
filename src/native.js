@@ -1,5 +1,6 @@
 // الجسر إلى طبقة Kotlin. خارج أندرويد (المتصفح والاختبارات) يعمل محرك وهمي بنفس الواجهة.
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { siteOf } from './links.js';
 
 const native = Capacitor.isNativePlatform();
 const Plugin = native ? registerPlugin('Sayl') : null;
@@ -12,11 +13,26 @@ export const isNative = native;
 const mockJobs = new Map();
 const listeners = { progress: [], state: [], shared: [] };
 const fire = (ev, data) => listeners[ev].forEach((cb) => cb(data));
+// محاكاة مشاركة رابط من تطبيق آخر في الاختبارات
+if (typeof window !== 'undefined') window.__share = (text) => fire('shared', { text });
 let mockCookies = false;
 let mockChannel = 'stable';
 
 function mockInfo(url) {
+  // ?delay=ms يؤخر الرد، و?title=… يحدد العنوان: لمحاكاة ردين يصلان بغير ترتيب الطلب
+  const delay = Number((url.match(/[?&]delay=(\d+)/) || [])[1] || 0);
+  if (delay) return new Promise((r) => setTimeout(r, delay)).then(() => mockInfo(url.replace(/[?&]delay=\d+/, '')));
   if (/fail|unsupported/.test(url)) return Promise.reject(new Error('ERROR: Unsupported URL: ' + url));
+  // منشور صور تيك توك: ?n= عدد الصور
+  // الرابط المختصر يفضي إلى المنشور نفسه، فهويته واحدة
+  const short = url.match(/vm\.tiktok\.com\/(\w+)/);
+  const ph = short ? [null, 'travel.ar', '7000000000000000001'] : url.match(/tiktok\.com\/@([\w.]+)\/photo\/(\d+)/);
+  if (ph) {
+    const n = Number((url.match(/[?&]n=(\d+)/) || [])[1] || 6);
+    return Promise.resolve({ json: JSON.stringify({ _type: 'album', id: ph[2], title: 'رحلة الشتاء\nصور من الجبل #سفر', uploader: ph[1], site: 'tiktok',
+      webpage_url: `https://www.tiktok.com/@${ph[1]}/photo/${ph[2]}`, audio: 'https://example.invalid/music.mp3',
+      entries: Array.from({ length: n }, (_, i) => ({ index: i + 1, urls: [`https://example.invalid/img/${i + 1}.jpg`], width: 1080, height: 1440 })) }) });
+  }
   if (/login/.test(url)) return Promise.reject(new Error('ERROR: Sign in to confirm you’re not a bot'));
   if (/list=/.test(url)) {
     return Promise.resolve({ json: JSON.stringify({ _type: 'playlist', id: 'PL1', title: 'قائمة تجريبية', entries: [
@@ -25,8 +41,19 @@ function mockInfo(url) {
       { id: 'p3', title: 'المقطع الثالث', url: 'https://www.youtube.com/watch?v=p3', duration: 300 },
     ] }) });
   }
-  return Promise.resolve({ json: JSON.stringify({ id: 'demo1', title: 'مقطع تجريبي', uploader: 'قناة تجريبية', duration: 245,
-    thumbnail: '', webpage_url: url, formats: [{ height: 1080, vcodec: 'avc1' }, { height: 720, vcodec: 'avc1' }, { height: 360, vcodec: 'avc1' }] }) });
+  const t = (url.match(/[?&]title=([^&]+)/) || [])[1];
+  return Promise.resolve({ json: JSON.stringify({ id: 'demo1', title: t ? decodeURIComponent(t) : 'مقطع تجريبي', uploader: 'قناة تجريبية', duration: 245,
+    thumbnail: '', webpage_url: url, subtitles: { ar: [{}], fr: [{}] }, automatic_captions: { 'en-orig': [{}], en: [{}], ar: [{}], de: [{}] }, formats: [{ height: 1080, vcodec: 'avc1' }, { height: 720, vcodec: 'avc1' }, { height: 360, vcodec: 'avc1' }] }) });
+}
+
+// ما يكتمل تنزيله يظهر في مكتبة المحرك الوهمي كما في MediaStore
+function mockSaved(j, name) {
+  const folder = j.path.split('/').slice(0, -1).join('/');
+  const kind = j.kind === 'image' ? 'image' : j.kind === 'audio' || j.kind === 'music' ? 'audio' : 'video';
+  mockLib.push({ id: `p:${j.path}`.toLowerCase(), uri: j.uri, name, size: kind === 'image' ? 350000 + (j.choice?.index || 0) * 1000 : 52428800, date: Date.now(),
+    duration: kind === 'image' ? 0 : 245000, width: 1080, height: kind === 'image' ? 1440 : 1920, mime: kind === 'image' ? 'image/jpeg' : kind === 'audio' ? 'audio/mpeg' : 'video/mp4',
+    kind, source: 'sayl', folder, owned: true });
+  mfire('libraryChanged', {});
 }
 
 function mockReorder(id, target) {
@@ -48,10 +75,29 @@ function mockRun(j) {
     cur.pct = Math.min(100, cur.pct + (cur.slow ? 2 : 25));
     cur.total = 52428800; cur.downloaded = Math.round(cur.total * cur.pct / 100);
     cur.speed = 1572864; cur.eta = Math.round((100 - cur.pct) / 25);
+    // window.__failImages: أرقام صور تفشل في أول محاولة (لاختبار إعادة المتعثرة فقط)
+    const failIdx = window.__failImages || [];
+    if (cur.kind === 'image' && failIdx.includes(cur.choice?.index) && !cur.attempts) {
+      clearInterval(t);
+      Object.assign(cur, { state: 'failed', attempts: 1, error: 'HTTP Error 403: Forbidden', finishedAt: Date.now() });
+      return fire('state', { ...cur });
+    }
     if (cur.pct >= 100) {
       clearInterval(t);
-      Object.assign(cur, { state: 'done', path: `Download/سيل/${cur.folder ? cur.folder + '/' : ''}${cur.title}.${cur.kind === 'audio' ? 'mp3' : 'mp4'}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
+      if (cur.kind === 'image' || cur.kind === 'music') {
+        const name = cur.kind === 'music' ? 'صوت المنشور.mp3' : `${String(cur.choice.index).padStart(3, '0')}.jpg`;
+        Object.assign(cur, { state: 'done', path: `Download/سيل/تيك توك/${cur.folder}/${name}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
+        mockSaved(cur, name);
+        return fire('state', { ...cur });
+      }
+      const dir = `Download/سيل/${siteOf(cur.url).folder}${cur.folder ? '/' + cur.folder : ''}`;
+      Object.assign(cur, { state: 'done', path: `${dir}/${cur.title}.${cur.kind === 'audio' ? 'mp3' : 'mp4'}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
+      // ترجمة ملفاً بجانب الفيديو
+      const sub = cur.choice?.subs;
+      if (sub && !sub.embed) cur.extras = JSON.stringify([{ lang: sub.lang, uri: `mock://sub/${cur.id}`, path: `${dir}/${cur.title}.${sub.lang}.srt` }]);
+      mockSaved(cur, cur.path.split('/').pop());
       fire('state', { ...cur });
+      mockChain(cur, dir);
     } else fire('progress', { ...cur });
   }, 150);
 }
@@ -76,7 +122,13 @@ const mock = {
   move: ({ id, delta }) => { mockReorder(id, (ids, i) => Math.max(0, Math.min(ids.length - 1, i + delta))); return Promise.resolve(); },
   toTop: ({ id }) => { mockReorder(id, () => 0); return Promise.resolve(); },
   startNow: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { scheduledAt: -1, wifiOnly: false, state: 'queued' }); fire('state', { ...j }); } return Promise.resolve(); },
-  retry: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }); mockRun(j); } return Promise.resolve(); },
+  retry: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }); fire('state', { ...j }); mockRun(j); } return Promise.resolve(); },
+  openUrl: ({ url }) => { window.__opened = url; return Promise.resolve(); },
+  // الملفات التي «حُذفت يدوياً» في الاختبار: window.__gone
+  exists: ({ uris }) => Promise.resolve({ exists: uris.map((u) => {
+    const j = [...mockJobs.values()].find((x) => `mock://${x.id}` === u);
+    return !(window.__gone || []).includes(u) && !(j && (window.__goneIndex || []).includes(j.choice?.index));
+  }) }),
   remove: ({ id }) => { mockJobs.delete(id); return Promise.resolve(); },
   clearFinished: () => { for (const [k, j] of mockJobs) if (j.state === 'failed' || j.state === 'canceled') mockJobs.delete(k); return Promise.resolve(); },
   open: () => Promise.resolve(),
@@ -112,6 +164,8 @@ export const Sayl = {
   startNow: (id) => P.startNow({ id }),
   retry: (id) => P.retry({ id }),
   remove: (id, deleteFile = false) => P.remove({ id, deleteFile }),
+  exists: async (uris) => (await P.exists({ uris })).exists,
+  openUrl: (url) => P.openUrl({ url }),
   clearFinished: () => P.clearFinished(),
   open: (id) => P.open({ id }),
   share: (id) => P.share({ id }),
@@ -163,7 +217,10 @@ export const AppUpdater = {
 };
 
 // حالات واتساب (StatusPlugin.kt)؛ المحرك الوهمي فيه 4 حالات لواتساب، وواتساب أعمال غير مثبّت
-const mockStatus = { granted: false, saved: new Set() };
+const mockStatus = { granted: false, saved: new Set(), gone: new Set() };
+export const mockStatusControl = { vanish: (name) => mockStatus.gone.add(name) };
+// للاختبارات في المتصفح فقط
+if (!native && typeof window !== 'undefined') window.__mockStatus = mockStatusControl;
 const mockItems = [
   { name: 'a1.jpg', video: false, duration: 0 }, { name: 'a2.mp4', video: true, duration: 15 },
   { name: 'a3.jpg', video: false, duration: 0 }, { name: 'a4.mp4', video: true, duration: 42 },
@@ -171,8 +228,15 @@ const mockItems = [
 const mockStatuses = {
   access: ({ app }) => Promise.resolve({ granted: app === 'wa' && mockStatus.granted, installed: app === 'wa' }),
   request: () => { mockStatus.granted = true; return Promise.resolve({ granted: true }); },
-  list: ({ app }) => Promise.resolve({ items: app === 'wa' ? mockItems.map((i, n) => ({ ...i, size: 1e6, time: Date.now() - n * 6e5, thumb: null, saved: mockStatus.saved.has(i.name) })) : [] }),
-  save: ({ names }) => { names.forEach((n) => mockStatus.saved.add(n)); return Promise.resolve({ saved: names.length }); },
+  list: ({ app }) => Promise.resolve({ items: app === 'wa' ? mockItems.map((i, n) => ({ ...i, size: 1e6, time: Date.now() - n * 6e5, thumb: null, saved: mockStatus.saved.has(`${app}:${i.name}`) })) : [] }),
+  // «gone» = حالة اختفت أثناء الحفظ (تنتهي بعد 24 ساعة)
+  save: ({ app, names }) => {
+    const ok = names.filter((n) => !mockStatus.gone.has(n));
+    ok.forEach((n) => mockStatus.saved.add(`${app}:${n}`));
+    // ما اختفى لم يعد في القائمة عند إعادة قراءتها
+    mockStatus.gone.forEach((n) => { const k = mockItems.findIndex((i) => i.name === n); if (k >= 0) mockItems.splice(k, 1); });
+    return Promise.resolve({ saved: ok.length, failed: names.filter((n) => mockStatus.gone.has(n)).map((name) => ({ name, error: 'الحالة لم تعد موجودة' })) });
+  },
   open: () => Promise.resolve(),
 };
 const ST = StatusesPlugin || mockStatuses;
@@ -229,6 +293,19 @@ function mockPlan(uri, level) {
   const vb = Math.max(Math.max(250000, px * 30 * 0.025), t);
   return { videoBps: Math.round(vb), audioBps: 128000, estimate: Math.round((vb + 128000) * p.duration / 8), worth: vb < v.bitrate * 0.9, hevc: true, hw: true, size: p.size, probe: p };
 }
+// خطوات تلقائية بعد التنزيل (قص ثم ضغط): الناتج بجانب الأصل، ومعرّف الخطوة ثابت
+function mockChain(j, dir) {
+  const steps = j.choice?.after;
+  if (!steps?.length) return;
+  const name = j.path.split('/').pop();
+  const input = { uri: j.uri, name, size: 52428800, path: j.path, mime: j.kind === 'audio' ? 'audio/mpeg' : 'video/mp4' };
+  mockStep(`${j.id}-${steps[0].op}`, steps, 0, input, { job: j.id, saveIn: dir }, j.title);
+}
+function mockStep(id, steps, i, input, extra, title) {
+  if (mockMedia.tasks.has(id)) return;
+  const s = steps[i];
+  mockMediaApi.enqueue({ tasks: [{ id, op: s.op, title, inputs: [input], params: { ...s.params, ...extra, chain: { steps, i } } }] });
+}
 const SUFFIX = { convert: 'محوّل', audio: 'صوت', compress: 'مضغوط', trim: 'مقطع', merge: 'مدموج', frame: 'لقطة' };
 function mockRunTask(t) {
   const iv = setInterval(() => {
@@ -246,10 +323,20 @@ function mockRunTask(t) {
       const ext = { audio: cur.params.format || 'mp3', frame: cur.params.format || 'jpg', convert: cur.params.target || 'mp4' }[cur.op] || 'mp4';
       const name = `${src.name.replace(/\.[^.]+$/, '')} (${SUFFIX[cur.op]}).${ext}`;
       const size = cur.op === 'compress' ? Math.round(cur.srcSize * 0.42) : cur.op === 'frame' ? 900000 : Math.round(cur.srcSize * 0.9);
-      const out = { uri: `mock://out/${cur.id}`, name, size, path: `Download/سيل/معالَج/${name}`, mime: ext === 'mp3' ? 'audio/mpeg' : ext === 'jpg' ? 'image/jpeg' : 'video/mp4' };
+      const folder = cur.params.saveIn || 'Download/سيل/معالَج';
+      const out = { uri: `mock://out/${cur.id}`, name, size, path: `${folder}/${name}`, mime: ext === 'mp3' ? 'audio/mpeg' : ext === 'jpg' ? 'image/jpeg' : 'video/mp4' };
       Object.assign(cur, { state: 'done', pct: 100, stage: '', outputs: [out], outSize: size, finishedAt: Date.now() });
-      mockLib.push(mkItem(0, { name, size, uri: out.uri, mime: out.mime, kind: out.mime.split('/')[0], source: 'sayl', folder: 'Download/سيل/معالَج', date: Date.now(), duration: 60000, width: 1920, height: 1080 }));
+      mockLib.push(mkItem(0, { name, size, uri: out.uri, mime: out.mime, kind: out.mime.split('/')[0], source: 'sayl', folder, date: Date.now(), duration: 60000, width: 1920, height: 1080 }));
+      // الجزء فقط: يُحذف الكامل ويشير سجل التنزيل إلى الجزء
+      const job = mockJobs.get(cur.params.job);
+      if (cur.params.deleteSource) {
+        const i = mockLib.findIndex((x) => x.uri === src.uri);
+        if (i >= 0) mockLib.splice(i, 1);
+        if (job) { Object.assign(job, { path: out.path, uri: out.uri }); fire('state', { ...job }); }
+      }
       mfire('libraryChanged', {});
+      const ch = cur.params.chain;
+      if (ch && ch.steps[ch.i + 1]) setTimeout(() => mockStep(`${cur.id}-${ch.steps[ch.i + 1].op}`, ch.steps, ch.i + 1, out, { job: cur.params.job, saveIn: cur.params.saveIn }, cur.title), 0);
     }
     mfire('task', { ...cur });
   }, 150);
@@ -275,6 +362,7 @@ const mockMediaApi = {
   clearTasks: () => { for (const [k, t] of mockMedia.tasks) if (t.state !== 'queued' && t.state !== 'running') mockMedia.tasks.delete(k); return Promise.resolve(); },
   open: () => Promise.resolve(),
   share: () => Promise.resolve(),
+  shareZip: ({ uris, name }) => { window.__zip = { uris, name }; return Promise.resolve({ count: uris.length, size: uris.length * 350000 }); },
   outDir: () => Promise.resolve({ label: mockMedia.out || 'Download/سيل/معالَج', custom: Boolean(mockMedia.out) }),
   chooseOutDir: () => { mockMedia.out = 'Movies/سيل'; return Promise.resolve({ label: mockMedia.out, custom: true }); },
   resetOutDir: () => { mockMedia.out = null; return Promise.resolve({ label: 'Download/سيل/معالَج', custom: false }); },
@@ -310,6 +398,7 @@ export const Media = {
   clear: () => M.clearTasks(),
   open: (uri, mime, name) => M.open({ uri, mime, name }),
   share: (uris) => M.share({ uris }),
+  shareZip: (uris, name) => M.shareZip({ uris, name }),
   outDir: () => M.outDir(),
   chooseOutDir: () => M.chooseOutDir(),
   resetOutDir: () => M.resetOutDir(),

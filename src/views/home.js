@@ -1,25 +1,44 @@
 // الرئيسية: حقل الرابط، والمعاينة، وبطاقات الأنواع، وآخر التنزيلات
-import { h, ic, toast, gcard, lcard, fmtDur, pathText } from '../ui.js';
+import { h, ic, toast, gcard, lcard, fmtDur, pathText, sheet } from '../ui.js';
 import { extractUrl, siteOf } from '../links.js';
-import { parseInfo } from '../formats.js';
+import { parseInfo, buildArgs } from '../formats.js';
+import { getSettings } from '../store.js';
 import { classifyError } from '../errors.js';
 import { Sayl, Clip } from '../native.js';
 import { doneJobs, refreshJobs, logError } from '../state.js';
 import { count, W } from '../text.js';
+import { quickLabel, quickHint, quickChoice } from '../quick.js';
 import { choicePicker, uid } from './choice.js';
 import { whenPicker } from './when.js';
+import { extrasPicker } from './extras.js';
 import { openPlaylist } from './playlist.js';
+import { openAlbum } from './album.js';
 import { openBatch } from './batch.js';
 import { openStatuses } from './statuses.js';
 import { engineUpdateFlow, cookiesFlow } from './more.js';
 import { openTools } from './tools.js';
 
 let pendingShared = null;
+let pendingQuick = null;
 let preferType = 'video';
 
+// رابط من المشاركة أو الحافظة: «احفظ بطريقتي» (طرق جاهزة بلمسة) أو المعاينة المفصّلة
 export function handleSharedText(text, ctx) {
-  pendingShared = text;
-  ctx.go('home');
+  const url = extractUrl(text);
+  const s = getSettings();
+  if (!url || !s.shareAsk || !s.quick.length) { pendingShared = text; ctx.go('home'); return; }
+  document.querySelector('.modal .quick-sheet')?.closest('.modal')?.remove();
+  const pick = (p) => () => { close(); pendingShared = url; pendingQuick = p; ctx.go('home'); };
+  const close = sheet(h('div', { class: 'quick-sheet' },
+    h('h3', {}, 'احفظ بطريقتي'),
+    h('small', { class: 'muted ltr ellipsis', dir: 'ltr' }, url),
+    h('div', { class: 'lcards' }, s.quick.map((p, i) => {
+      const c = lcard({ color: p.type === 'audio' ? 'c-violet' : 'c-sky', icon: p.type === 'audio' ? 'audio' : 'video', title: quickLabel(p), sub: quickHint(p), onClick: pick(p), end: ic('download', 'l-go') });
+      c.id = `quick-${i}`;
+      return c;
+    })),
+    h('button', { class: 'btn ghost wide', id: 'quick-custom', onclick: pick(null) }, ic('gear'), 'اختيار مفصّل'),
+    h('p', { class: 'hint' }, 'غيّر هذه الطرق أو أوقف هذه النافذة من المزيد ← الإعدادات ← «احفظ بطريقتي».')));
 }
 
 export async function enqueueJobs(jobs) {
@@ -50,14 +69,29 @@ export function errorCard(err, { onRetry } = {}) {
     act && act[1] && h('button', { class: 'btn grad c-pink', 'data-act': c.action, onclick: act[1] }, act[0]));
 }
 
-function preview(info, url) {
+// «احفظ بطريقتي»: يُضاف مباشرة بالطريقة المختارة، والمعاينة تبقى ظاهرة لمن أراد غيرها
+async function saveQuick(info, url, p) {
+  const choice = quickChoice(p);
+  const s = getSettings();
+  await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: choice.type, args: buildArgs(choice, { aria2: s.aria2, connections: s.connections }), choice,
+    thumb: info.thumbnail || '', site: siteOf(url).id, scheduledAt: 0, wifiOnly: false }]);
+}
+
+// current: الرابط الموجود في الحقل الآن؛ المعاينة لا تنزّل إلا الرابط الذي قُرئت منه
+function preview(info, url, current) {
   const site = siteOf(url);
-  const picker = choicePicker({ heights: info.heights, type: preferType });
+  const extras = extrasPicker(info, preferType);
+  const picker = choicePicker({ heights: info.heights, type: preferType, onType: (k) => extras.setKind(k) });
   const when = whenPicker();
-  const btn = h('button', { id: 'dl', class: 'btn primary wide' }, ic('download'), 'نزّل');
+  const btn = h('button', { id: 'dl', class: 'btn primary wide', 'data-url': url }, ic('download'), 'نزّل');
   btn.onclick = async () => {
+    if (current() !== url) { toast('تغيّر الرابط؛ اضغط «اقرأ» لقراءة الرابط الجديد', 'bad'); return; }
+    const x = extras.get();
+    if (x.error) { toast(x.error, 'bad'); return; }
+    const choice = { ...picker.choice(), ...(x.subs && { subs: x.subs }), ...(x.after && { after: x.after }) };
+    const s = getSettings();
     btn.disabled = true;
-    await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: picker.args(), choice: picker.choice(),
+    await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: buildArgs(choice, { aria2: s.aria2, connections: s.connections }), choice,
       thumb: info.thumbnail || '', site: site.id, ...when.get() }]);
     btn.disabled = false;
   };
@@ -66,28 +100,51 @@ function preview(info, url) {
       info.thumbnail ? h('img', { class: 'thumb', src: info.thumbnail, alt: '', referrerpolicy: 'no-referrer', onerror: (e) => e.target.replaceWith(ic('video', 'thumb ph')) }) : ic('video', 'thumb ph'),
       h('div', { class: 'pv-txt' }, h('b', { class: 'more', style: '--lines:3', dir: 'auto' }, info.title),
         h('small', {}, [site.name, info.uploader, fmtDur(info.duration)].filter(Boolean).join(' · ')))),
-    picker.el, when.el, btn);
+    picker.el, extras.el, when.el, btn);
 }
 
 export function homeView(ctx) {
   const { page } = ctx;
   const input = h('input', { id: 'url', type: 'url', inputmode: 'url', placeholder: 'الصق رابط الفيديو أو قائمة التشغيل', autocomplete: 'off', enterkeyhint: 'go' });
   const result = h('div', { class: 'result' });
+  // كل قراءة لها رقم؛ لا يُعرض إلا رد آخر قراءة، والقديم الذي يصل متأخراً يُهمل
+  let req = 0;
+  let shownUrl = null;
+  const current = () => extractUrl(input.value);
 
   async function analyze() {
     const url = extractUrl(input.value);
     if (!url) { toast('الصق رابطاً صحيحاً لصفحة الفيديو', 'bad'); return; }
+    const my = ++req;
+    // طريقة «احفظ بطريقتي» تخص الرابط الذي شوركت معه فقط
+    const quick = pendingQuick && url === pendingQuick.url ? pendingQuick.p : null;
+    pendingQuick = null;
     input.value = url;
+    shownUrl = null;
     result.replaceChildren(h('div', { class: 'card center' }, h('div', { class: 'spinner' }), h('div', { class: 'muted' }, 'جارٍ قراءة الرابط…')));
     try {
       const info = parseInfo(await Sayl.info(url));
+      if (my !== req) return;
+      if (quick && info.kind !== 'single') toast('الرابط فيه أكثر من ملف؛ اختر منه ما تريد', '');
       if (info.kind === 'playlist') { result.replaceChildren(); openPlaylist(ctx, info, url); return; }
-      result.replaceChildren(preview(info, url));
+      if (info.kind === 'album') { result.replaceChildren(); openAlbum(ctx, info); return; }
+      shownUrl = url;
+      result.replaceChildren(preview(info, url, current));
+      if (quick) await saveQuick(info, url, quick);
     } catch (e) {
+      if (my !== req) return;
       logError('info', e.message);
       result.replaceChildren(errorCard(e, { onRetry: analyze }));
     }
   }
+
+  // تغيير الرابط يبطل القراءة الجارية والمعاينة القديمة
+  input.addEventListener('input', () => {
+    const u = current();
+    if (u === shownUrl) return;
+    req++;
+    if (result.firstChild) { shownUrl = null; result.replaceChildren(); }
+  });
 
   const go = h('button', { id: 'go', class: 'btn primary', onclick: analyze }, 'اقرأ');
   input.addEventListener('keydown', (e) => e.key === 'Enter' && analyze());
@@ -132,7 +189,9 @@ export function homeView(ctx) {
 
   if (pendingShared) {
     input.value = pendingShared;
+    if (pendingQuick !== null) pendingQuick = pendingQuick && { url: extractUrl(pendingShared), p: pendingQuick };
     pendingShared = null;
     analyze();
   }
+  return () => { req++; };
 }

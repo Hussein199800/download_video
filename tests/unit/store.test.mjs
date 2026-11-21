@@ -12,7 +12,8 @@ test('القيم الافتراضية عند التخزين الفارغ أو ا
   mem.set('sayl.settings', '{not json');
   assert.deepEqual(getSettings(), DEFAULTS);
   assert.deepEqual(DEFAULTS, { theme: 'auto', fontScale: 1, video: 'best', audio: 'mp3', kbps: 192, parallel: 1, aria2: false, clipboard: true,
-    connections: 4, retries: 5, window: { on: false, from: '01:00', to: '07:00' } });
+    connections: 4, retries: 5, window: { on: false, from: '01:00', to: '07:00' }, shareAsk: true,
+    quick: [{ type: 'video', height: 'best' }, { type: 'video', height: 720, wa: true }, { type: 'audio', format: 'mp3', kbps: 192 }] });
 });
 
 test('الحفظ مع حصر القيم في حدودها', () => {
@@ -56,4 +57,19 @@ test('ترقية 1.1: من فعّل aria2c افتراضياً في 1.0 يعود 
   setSettings({ aria2: true });
   migrate();
   assert.equal(getSettings().aria2, true);
+});
+
+test('طرق «احفظ بطريقتي»: صالحة وبلا تكرار وخمس على الأكثر', async () => {
+  const { quickLabel, quickChoice, sameQuick } = await import('../../src/quick.js');
+  setSettings({ quick: [{ type: 'video', height: '1080' }, { type: 'video', height: 1080 }, { type: 'audio', format: 'flac' }, { type: 'x' }, null,
+    { type: 'audio', format: 'm4a', kbps: 320 }, { type: 'video', height: 9999, wa: 1 }, { type: 'video', height: 480 }, { type: 'video', height: 360 }, { type: 'video', height: 2160 }] });
+  const q = getSettings().quick;
+  assert.deepEqual(q, [{ type: 'video', height: 1080 }, { type: 'audio', format: 'mp3', kbps: 192 }, { type: 'audio', format: 'm4a' },
+    { type: 'video', height: 'best', wa: true }, { type: 'video', height: 480 }]);
+  assert.equal(quickLabel(q[3]), 'فيديو أفضل جودة + نسخة للواتساب');
+  assert.deepEqual(quickChoice(q[3]).after, [{ op: 'compress', params: { level: 'strong', codec: 'h264' } }]);
+  assert.equal(quickChoice(q[0]).after, undefined);
+  assert.ok(sameQuick({ type: 'video', height: '720' }, { type: 'video', height: 720 }));
+  setSettings({ quick: [] });
+  assert.deepEqual(getSettings().quick, []);
 });

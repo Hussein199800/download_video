@@ -30,3 +30,9 @@ test('موعد الفحص التلقائي', () => {
   assert.equal(shouldCheck(88 * h, 100 * h, 12), true);
   assert.equal(shouldCheck(95 * h, 100 * h, 12), false);
 });
+
+test('ملاحظات الإصدار تُعرض نصاً عادياً بلا Markdown', async () => {
+  const { plainNotes } = await import('../../src/update.js');
+  const md = '## سَيْل 1.2.0\n\n- **أدوات:** تحويل\n  - **ضغط** الفيديو\n- عادي';
+  assert.equal(plainNotes(md), '• أدوات: تحويل\n   • ضغط الفيديو\n• عادي');
+});

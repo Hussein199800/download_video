@@ -40,9 +40,13 @@ class SaylPlugin : Plugin() {
     fun info(call: PluginCall) {
         val url = call.getString("url") ?: return call.reject("url مطلوب")
         bg(call) {
+            // منشور صور تيك توك: لا يدعمه yt-dlp، فيُقرأ من صفحته مباشرة
+            if (TikTokPhotos.isPhotoUrl(url)) return@bg call.resolve(JSObject().put("json", TikTokPhotos.toJson(TikTokPhotos.read(url))))
             val json = try {
                 Engine.info(context, url, Bus.cookies(context).takeIf { it.exists() })
             } catch (e: Exception) {
+                // رابط تيك توك مختصر لمنشور صور: يُعرف بعد فتحه
+                if (Sites.of(url) == "tiktok") runCatching { TikTokPhotos.read(url) }.getOrNull()?.let { return@bg call.resolve(JSObject().put("json", TikTokPhotos.toJson(it))) }
                 // السيرفر 1 لم يقرأ الرابط: نجرّب السيرفر 2 إن كان يدعمه وكان الخطأ غير دائم
                 if (Server2.supports(url) && Failure.classify(e.message) != Failure.Kind.PERMANENT) runCatching { Server2.info(url) }.getOrElse { throw e } else throw e
             }
@@ -62,6 +66,8 @@ class SaylPlugin : Plugin() {
                 id = o.getString("id"), url = o.getString("url"), title = o.optString("title"), kind = o.optString("kind", "video"),
                 args = args, thumb = o.optString("thumb").ifEmpty { null }, site = o.optString("site", "other"),
                 folder = o.optString("folder").ifEmpty { null },
+                group = o.optString("group").ifEmpty { null }, author = o.optString("author").ifEmpty { null },
+                engine = if (o.optString("kind") == "image" || o.optString("kind") == "music") 3 else 1,
                 choice = o.optJSONObject("choice")?.toString(),
                 scheduledAt = o.optLong("scheduledAt", 0), wifiOnly = o.optBoolean("wifiOnly", false),
             )
@@ -125,6 +131,32 @@ class SaylPlugin : Plugin() {
         store.remove(id)
         DownloadWorker.workDir(context, id).deleteRecursively()
         call.resolve()
+    }
+
+    /** فتح رابط (المنشور الأصلي أو صفحة التحميل) في المتصفح أو تطبيقه؛ http/https فقط */
+    @PluginMethod
+    fun openUrl(call: PluginCall) {
+        val url = call.getString("url") ?: return call.reject("url مطلوب")
+        if (!url.startsWith("https://") && !url.startsWith("http://")) return call.reject("رابط غير صالح")
+        try {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("لا يوجد تطبيق يفتح الرابط")
+        }
+    }
+
+    /** أي الملفات المحفوظة ما زالت موجودة (لإعادة تنزيل صورة حُذفت يدوياً من ألبوم) */
+    @PluginMethod
+    fun exists(call: PluginCall) {
+        val uris = call.getArray("uris")?.toList<String>().orEmpty()
+        bg(call) {
+            val out = JSArray()
+            uris.forEach { u ->
+                out.put(runCatching { context.contentResolver.openFileDescriptor(Uri.parse(u), "r")?.use { true } ?: false }.getOrDefault(false))
+            }
+            call.resolve(JSObject().put("exists", out))
+        }
     }
 
     @PluginMethod

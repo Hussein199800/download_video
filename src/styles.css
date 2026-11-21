@@ -384,6 +384,38 @@ bdi { unicode-bidi: isolate; }
 .clip-bubble .cb-x { width: var(--tap); height: var(--tap); padding: .8rem; border: 0; background: none; color: var(--mute); cursor: pointer; flex: none; border-radius: 50%; }
 .clip-bubble.out { animation: down .2s ease forwards; }
 
+/* ---------- ألبوم الصور ---------- */
+.album-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .375rem; margin-top: .5rem; }
+.album-item { position: relative; overflow: hidden; border-radius: var(--r-sm); border: 2px solid transparent; background: var(--soft); padding: 0; cursor: pointer; min-height: var(--tap); }
+.album-item img, .album-ph { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.album-ph { display: grid; place-items: center; color: var(--mute); }
+.album-ph span { width: 1.75rem; height: 1.75rem; opacity: .5; }
+.album-n { position: absolute; bottom: .3rem; inset-inline-start: .3rem; background: #000b; color: #fff; font-size: var(--fz-xs); padding: 0 .4rem; border-radius: var(--r-pill); direction: ltr; }
+.album-check { position: absolute; top: .3rem; inset-inline-end: .3rem; width: 1.6rem; height: 1.6rem; padding: .25rem; border-radius: 50%; border: 2px solid #fff; background: #0006; color: transparent; }
+.album-item.sel { border-color: #f59e0b; }
+.album-item.sel .album-check { background: #f59e0b; border-color: #f59e0b; color: #2a1700; }
+.album-saved { display: none; position: absolute; top: .3rem; inset-inline-start: .3rem; align-items: center; gap: .125rem; background: #065f46f0; color: #fff; font-size: var(--fz-xs); padding: .1rem .4rem .1rem .3rem; border-radius: var(--r-pill); }
+.album-saved span { width: .75rem; height: .75rem; }
+.album-item.saved .album-saved { display: inline-flex; }
+html.two-col .album-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.lib-count { position: absolute; top: .5rem; inset-inline-start: .5rem; display: inline-flex; align-items: center; gap: .2rem; background: #000b; color: #fff; font-size: var(--fz-xs); padding: .1rem .45rem; border-radius: var(--r-pill); direction: ltr; }
+.lib-count span { width: .8rem; height: .8rem; }
+.lib-item.list .lib-count { top: auto; bottom: .75rem; inset-inline-start: .75rem; }
+.post-desc { white-space: pre-line; overflow-wrap: anywhere; color: var(--txt); background: var(--soft); border-radius: var(--r-md); padding: .625rem .75rem; margin: 0; }
+.lib-album .album-n { direction: ltr; }
+
+/* ---------- الجولة التعريفية ---------- */
+.modal.tour { align-items: center; padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + var(--safe-bot)); }
+.tour-b { position: relative; width: 100%; max-width: 28rem; margin: 0 auto; background: var(--surface); border-radius: var(--r-xl); padding: 1.75rem 1.25rem 1.25rem; display: grid; justify-items: center; gap: .625rem; text-align: center; animation: up .25s ease; box-shadow: var(--shadow); max-height: 100%; overflow: auto; }
+.tour-skip { position: absolute; top: .25rem; inset-inline-end: .75rem; font-size: var(--fz-sm); }
+.tour-ic { width: 5rem; height: 5rem; padding: 1.25rem; border-radius: 1.5rem; color: #fff; background: linear-gradient(145deg, var(--g1), var(--g2)); box-shadow: 0 .75rem 1.75rem -.6rem var(--g2); margin-bottom: .25rem; }
+.tour-b h2 { margin: 0; font-size: var(--fz-xl); }
+.tour-b p { margin: 0; line-height: 1.8; color: var(--mute); }
+.tour-dots { display: flex; gap: .375rem; margin: .375rem 0; }
+.tour-dots i { width: .5rem; height: .5rem; border-radius: var(--r-pill); background: var(--line); transition: width .2s; }
+.tour-dots i.on { width: 1.5rem; background: var(--pri); }
+.tour-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; width: 100%; }
+
 /* ---------- نوافذ وإشعارات ---------- */
 .toast { position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + 1.5rem); transform: translate(-50%, 1.25rem); opacity: 0; z-index: 40; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); padding: .625rem 1.125rem; border-radius: .875rem; font-weight: var(--fw-b); transition: all .3s; max-width: min(90vw, 28rem); text-align: center; pointer-events: none; overflow-wrap: anywhere; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -529,3 +561,20 @@ html.two-col .sheet { border-radius: var(--r-xl); margin-bottom: 0; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* خيارات إضافية قبل التنزيل: تُطوى افتراضياً حتى تبقى المعاينة قصيرة */
+details.extras > summary { list-style: none; cursor: pointer; display: grid; gap: var(--sp-1); font-weight: 700; padding-inline-end: 2rem; position: relative; }
+details.extras > summary::-webkit-details-marker { display: none; }
+details.extras > summary small { color: var(--mute); font-weight: 400; font-size: var(--fz-xs); }
+details.extras > summary::after { content: ''; position: absolute; inset-inline-end: .25rem; top: .4rem; width: .55rem; height: .55rem; border: solid var(--mute); border-width: 0 0 2px 2px; transform: rotate(-45deg); transition: transform .2s; }
+details.extras[open] > summary::after { transform: rotate(135deg); }
+details.extras[open] > summary { margin-bottom: var(--sp-2); }
+.clip-box { display: grid; gap: var(--sp-2); padding: 0 0 var(--sp-2); border-bottom: 1px solid var(--line); }
+
+/* «احفظ بطريقتي» */
+.quick-sheet { display: grid; gap: var(--sp-3); }
+.quick-sheet .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.quick-list { display: grid; }
+.quick-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
+.quick-row .l-txt { flex: 1; min-width: 0; display: grid; }
+.quick-row small { color: var(--mute); font-size: var(--fz-xs); }

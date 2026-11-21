@@ -35,14 +35,21 @@ object Saver {
         "jpg", "jpeg" -> "image/jpeg"
         "png" -> "image/png"
         "webp" -> "image/webp"
+        "srt" -> "application/x-subrip"
         "gif" -> "image/gif"
         else -> "application/octet-stream"
     }
 
     data class Saved(val uri: String, val path: String)
 
-    fun publish(ctx: Context, file: File, folder: String?): Saved {
-        val sub = listOfNotNull(ROOT, safeFolder(folder)).joinToString("/")
+    fun publish(ctx: Context, file: File, folder: String?): Saved = publishIn(ctx, file, listOf(folder))
+
+    /** مسار من مقاطع منفصلة تحت سيل (مثل [المنصة، القائمة])، كل مقطع منقّح على حدة */
+    fun subPath(segments: List<String?>) = (listOf(ROOT) + segments.mapNotNull { safeFolder(it) }).joinToString("/")
+
+    /** يعيد الاسم الفعلي للملف، فقد يضيف أندرويد «(1)» إن وُجد ملف بالاسم نفسه */
+    fun publishIn(ctx: Context, file: File, segments: List<String?>): Saved {
+        val sub = subPath(segments)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val cr = ctx.contentResolver
             val values = ContentValues().apply {
@@ -60,7 +67,10 @@ object Saver {
                 throw e
             }
             file.delete()
-            return Saved(uri.toString(), "${Environment.DIRECTORY_DOWNLOADS}/$sub/${file.name}")
+            val name = runCatching {
+                cr.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            }.getOrNull() ?: file.name
+            return Saved(uri.toString(), "${Environment.DIRECTORY_DOWNLOADS}/$sub/$name")
         }
         @Suppress("DEPRECATION")
         val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), sub).apply { mkdirs() }

@@ -41,7 +41,7 @@ export function openPlaylist(ctx, info, url) {
     };
     page.append(
       h('div', { class: 'hero c-amber' }, ic('playlist', 'h-ic'), h('b', {}, info.title),
-        h('small', {}, `${count(info.count, W.clip)} · ${avail.length} متاح للتنزيل. تُحفظ في مجلد باسم القائمة داخل «سيل».`)),
+        h('small', {}, `${count(info.count, W.clip)} · ${avail.length} متاح للتنزيل. تُحفظ في مجلد باسم القائمة داخل «سيل ← ${site.folder}».`)),
       h('div', { class: 'card' }, picker.el, when.el),
       h('div', { class: 'card' }, h('div', { class: 'pl-bar' }, h('b', {}, 'المقاطع'), all), list),
       h('div', { class: 'sticky-act' }, add),

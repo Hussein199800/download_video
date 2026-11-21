@@ -5,7 +5,7 @@ import { allTasks, onTasks, startTasks } from '../tasks.js';
 import { processSection } from './process.js';
 import { Sayl } from '../native.js';
 import { classifyError } from '../errors.js';
-import { activeJobs, onJobs, refreshJobs, forget } from '../state.js';
+import { activeJobs, allJobs, onJobs, refreshJobs, forget } from '../state.js';
 import { showDetails } from './details.js';
 import { scheduleLabel, retryLabel } from '../schedule.js';
 import { getSettings } from '../store.js';
@@ -51,6 +51,30 @@ function jobCard(j) {
   );
 }
 
+// ألبوم في الطابور: بطاقة واحدة لكل صور المنشور بدل بطاقة لكل صورة
+function albumCard(g, members) {
+  const total = members.length;
+  const done = members.filter((j) => j.state === 'done').length;
+  const failed = members.filter((j) => j.state === 'failed' || j.state === 'canceled');
+  const active = members.filter((j) => !['done', 'failed', 'canceled'].includes(j.state));
+  const running = members.filter((j) => j.state === 'running');
+  const pctNow = ((done + running.reduce((n, j) => n + (j.pct || 0) / 100, 0)) / total) * 100;
+  const j0 = members[0];
+  const act = (icon, text, fn, extra = 'ghost') => h('button', { class: `btn sm ${extra}`, 'data-act': text,
+    onclick: async () => { try { await fn(); await refreshJobs(); } catch (e) { toast(e.message, 'bad'); } } }, ic(icon), text);
+  const tag = active.length ? ['يُنزَّل', 'run'] : failed.length ? ['تعذّر بعضها', 'bad'] : ['اكتمل', 'ok'];
+  return h('div', { class: 'job c-amber', 'data-group': g },
+    h('div', { class: 'job-h' }, ic('image', 'job-ic'),
+      h('div', { class: 'job-t' }, h('b', { class: 'more', dir: 'auto' }, j0.title), h('small', {}, `ألبوم${j0.author ? ` · @${j0.author}` : ''}`)),
+      h('span', { class: `tag ${tag[1]}` }, tag[0])),
+    active.length ? h('div', { class: 'bar' }, h('i', { style: `width:${pctNow}%` })) : null,
+    h('div', { class: 'job-meta' }, h('span', {}, `حُفظت ${done} من ${count(total, W.file)}`), failed.length ? h('span', { class: 'err-text' }, `تعذّرت ${count(failed.length, W.file)}`) : null),
+    h('div', { class: 'job-acts' },
+      failed.length && act('retry', 'إعادة المتعثرة', () => Promise.all(failed.map((j) => Sayl.retry(j.id))), 'primary'),
+      active.length && act('x', 'إلغاء الباقي', () => Promise.all(active.map((j) => Sayl.cancel(j.id))), 'danger'),
+      !active.length && failed.length && act('trash', 'إزالة المتعثرة', async () => { for (const j of failed) { await Sayl.remove(j.id); forget(j.id); } })));
+}
+
 export function jobsView({ page, go }) {
   const box = h('div', { class: 'jobs' });
   const head = h('div');
@@ -72,7 +96,17 @@ export function jobsView({ page, go }) {
           h('small', {}, 'في الطابور', ic('info')), h('b', {}, String(Math.max(0, waiting))))) : '',
       finished ? h('div', { class: 'card-h' }, h('span', { class: 'muted' }, count(finished, ['تنزيل واحد فاشل أو ملغى', 'تنزيلان فاشلان أو ملغيان', 'تنزيلات فاشلة أو ملغاة', 'تنزيلاً فاشلاً أو ملغى'])),
         h('button', { class: 'link', onclick: async () => { await Sayl.clearFinished(); await refreshJobs(); } }, 'مسحها')) : '');
-    box.replaceChildren(...(list.length ? list.map(jobCard) : [h('div', { class: 'card empty' }, ic('download'),
+    // صور الألبوم الواحد في بطاقة واحدة مكان أول صورة منه
+    const members = new Map();
+    for (const j of allJobs()) if (j.group) members.set(j.group, [...(members.get(j.group) || []), j]);
+    const seen = new Set();
+    const cards = list.map((j) => {
+      if (!j.group) return jobCard(j);
+      if (seen.has(j.group)) return null;
+      seen.add(j.group);
+      return albumCard(j.group, members.get(j.group).sort((a, b) => String(a.url).localeCompare(String(b.url))));
+    }).filter(Boolean);
+    box.replaceChildren(...(cards.length ? cards : [h('div', { class: 'card empty' }, ic('download'),
       h('div', {}, 'لا توجد تنزيلات جارية.'), h('button', { class: 'btn primary', onclick: () => go('home') }, 'ابدأ تنزيلاً'))]));
   };
   page.append(h('div', { class: 'intro' }, h('h2', {}, 'التنزيلات'), h('p', {}, 'تستمر في الخلفية حتى لو أغلقت التطبيق، ويظهر تقدمها في الإشعارات.')), proc, head, box);
