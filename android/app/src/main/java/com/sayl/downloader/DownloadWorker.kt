@@ -62,7 +62,8 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
             // أُلغيت أو أُوقفت أو بدأت محاولة أحدث قبل الحفظ: لا ننشر شيئاً
             val before = store.get(job.id)
             if (before == null || !mine() || before.state == "canceled") throw Server2.Canceled()
-            val saved = Saver.publish(applicationContext, file, job.folder)
+            // Download/سيل/<المنصة>/[قائمة التشغيل]/الملف
+            val saved = Saver.publishIn(applicationContext, file, listOf(Sites.folder(job.site, job.url), job.folder))
             // روابط «عدة روابط» تُضاف بعنوان الرابط نفسه؛ نأخذ العنوان الحقيقي من اسم الملف
             val title = if (job.title == job.url) file.nameWithoutExtension.replace(Regex(" \\[[^\\]]+]$"), "") else job.title
             val now = System.currentTimeMillis()

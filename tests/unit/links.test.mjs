@@ -35,3 +35,22 @@ https://www.instagram.com/reel/r1/, https://youtu.be/b.`;
   assert.deepEqual(extractUrls(text), ['https://youtu.be/a', 'https://vt.tiktok.com/x/', 'https://www.instagram.com/reel/r1/', 'https://youtu.be/b']);
   assert.deepEqual(extractUrls(''), []);
 });
+
+test('مضيفات المنصات ومجلداتها مطابقة لـ Sites.kt', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { SITES } = await import('../../src/links.js');
+  const kt = readFileSync(new URL('../../android/app/src/main/java/com/sayl/downloader/Sites.kt', import.meta.url), 'utf8');
+  for (const s of SITES) {
+    const m = kt.match(new RegExp(`"${s.id}" to listOf\\(([^)]*)\\)`));
+    assert.ok(m, s.id);
+    assert.deepEqual(m[1].match(/"([^"]+)"/g).map((x) => x.slice(1, -1)), s.hosts, s.id);
+    assert.ok(kt.includes(`"${s.id}" to "${s.folder}"`), `${s.id} folder`);
+  }
+  assert.ok(kt.includes('"other" to "مواقع أخرى"'));
+});
+
+test('مجلد المنصة من رابط المنشور المختصر', async () => {
+  const { siteOf } = await import('../../src/links.js');
+  assert.equal(siteOf('https://vm.tiktok.com/ZMabc/').folder, 'تيك توك');
+  assert.equal(siteOf('https://vimeo.com/1').folder, 'مواقع أخرى');
+});

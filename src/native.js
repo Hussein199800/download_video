@@ -1,5 +1,6 @@
 // الجسر إلى طبقة Kotlin. خارج أندرويد (المتصفح والاختبارات) يعمل محرك وهمي بنفس الواجهة.
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { siteOf } from './links.js';
 
 const native = Capacitor.isNativePlatform();
 const Plugin = native ? registerPlugin('Sayl') : null;
@@ -54,7 +55,7 @@ function mockRun(j) {
     cur.speed = 1572864; cur.eta = Math.round((100 - cur.pct) / 25);
     if (cur.pct >= 100) {
       clearInterval(t);
-      Object.assign(cur, { state: 'done', path: `Download/سيل/${cur.folder ? cur.folder + '/' : ''}${cur.title}.${cur.kind === 'audio' ? 'mp3' : 'mp4'}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
+      Object.assign(cur, { state: 'done', path: `Download/سيل/${siteOf(cur.url).folder}/${cur.folder ? cur.folder + '/' : ''}${cur.title}.${cur.kind === 'audio' ? 'mp3' : 'mp4'}`, uri: 'mock://' + cur.id, finishedAt: Date.now() });
       fire('state', { ...cur });
     } else fire('progress', { ...cur });
   }, 150);

@@ -80,6 +80,7 @@ async function main() {
     await page.click('.tabbar [data-tab="library"]');
     await page.click('#open-history');
     check('بعد الاكتمال تظهر في سجل التنزيلات', /مقطع تجريبي/.test(await text(page)));
+    check('الملف في مجلد منصته: التنزيلات ← سيل ← يوتيوب', /التنزيلات ← سيل ← يوتيوب ← مقطع تجريبي/.test(await text(page)));
     await shot(page, { path: path.join(OUT, 'history.png') });
 
     // تكرار الرابط نفسه أثناء التنزيل لا يُضاف مرتين
