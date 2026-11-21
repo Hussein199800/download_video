@@ -31,11 +31,14 @@ function check(name, cond, info = '') {
   if (!cond) failures++;
 }
 
-async function newPage(browser, base, { scheme = 'dark', storage = {}, viewport = { width: 390, height: 844 }, touch = false } = {}) {
+// intro: true = أول تثبيت (تظهر الجولة)؛ وإلا تُعدّ الجولة و«ما الجديد» قد شوهدا حتى لا يغطيا الاختبارات
+async function newPage(browser, base, { scheme = 'dark', storage = {}, viewport = { width: 390, height: 844 }, touch = false, intro = false } = {}) {
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: 1, colorScheme: scheme, hasTouch: touch });
   await ctx.route('https://api.github.com/**', (r) => r.fulfill({ status: 200, contentType: 'application/json',
     body: JSON.stringify({ tag_name: 'v' + VER, body: '', assets: [] }) }));
-  await ctx.addInitScript((s) => { for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v); }, storage);
+  const init = intro ? storage : { 'sayl.meta': JSON.stringify({ tourSeen: true, seenVersion: VER }), ...storage };
+  // تُكتب مرة واحدة فقط (إعادة التحميل لا تعيدها) حتى تُختبر القيم المحفوظة بعدها
+  await ctx.addInitScript((s) => { for (const [k, v] of Object.entries(s)) if (localStorage.getItem(k) == null) localStorage.setItem(k, v); }, init);
   const page = await ctx.newPage();
   page.errors = [];
   page.on('pageerror', (e) => page.errors.push(e.message));

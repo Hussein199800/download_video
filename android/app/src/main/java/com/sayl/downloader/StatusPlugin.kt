@@ -146,7 +146,7 @@ class StatusPlugin : Plugin() {
                 items(app).forEach {
                     val (t, dur) = thumb(it)
                     arr.put(JSObject().put("name", it.name).put("video", StatusPaths.isVideo(it.name)).put("size", it.size)
-                        .put("time", it.time).put("duration", dur).put("thumb", t?.path).put("saved", it.name in saved))
+                        .put("time", it.time).put("duration", dur).put("thumb", t?.path).put("saved", isSaved(saved, app, it.name)))
                 }
                 call.resolve(JSObject().put("items", arr))
             } catch (e: Exception) {
@@ -163,23 +163,53 @@ class StatusPlugin : Plugin() {
         return dest
     }
 
+    /** «app:name» يميّز واتساب عن واتساب أعمال؛ الأسماء المجردة من الإصدارات السابقة تُقبل للاثنين */
+    private fun savedKey(app: String, name: String) = "$app:$name"
+
+    private fun isSaved(set: Set<String>, app: String, name: String) = savedKey(app, name) in set || name in set
+
+    @Volatile
+    private var saving = false
+
     @PluginMethod
     fun save(call: PluginCall) {
         val app = call.getString("app", "wa")!!
         val names = call.getArray("names")?.toList<String>() ?: return call.reject("names مطلوب")
+        // ضغطتان متتاليتان لا تحفظان النسخ نفسها مرتين
+        synchronized(this) {
+            if (saving) return call.reject("الحفظ جارٍ، انتظر قليلاً")
+            saving = true
+        }
         Thread {
+            val ok = ArrayList<String>()
+            val failed = JSArray()
             try {
-                val saved = prefs().getStringSet("saved", emptySet())!!.toMutableSet()
                 names.forEach { n ->
-                    Saver.publish(context, copyToCache(app, n, "status-save"), "حالات واتساب")
-                    saved += n
+                    try {
+                        Saver.publish(context, copyToCache(app, n, "status-save"), "حالات واتساب")
+                        ok += n
+                        // تُسجَّل كل حالة فور نشرها، فلا يضيع ما نجح إن تعثّر ما بعده
+                        synchronized(this) {
+                            val set = prefs().getStringSet("saved", emptySet())!!.toMutableSet()
+                            set += savedKey(app, n)
+                            prefs().edit().putStringSet("saved", set).commit()
+                        }
+                    } catch (e: Exception) {
+                        failed.put(JSObject().put("name", n).put("error", e.message ?: "تعذّر الحفظ"))
+                    }
                 }
-                // الحالات تختفي بعد 24 ساعة؛ لا نُبقي إلا أسماء الموجود منها
-                val present = (items("wa") + items("w4b")).map { it.name }.toSet()
-                prefs().edit().putStringSet("saved", saved.filter { it in present || it in names }.toSet()).apply()
-                call.resolve(JSObject().put("saved", names.size))
-            } catch (e: Exception) {
-                call.reject(e.message ?: "تعذّر الحفظ")
+                // الحالات تختفي بعد 24 ساعة؛ لا نُبقي إلا علامات الموجود منها
+                runCatching {
+                    val wa = items("wa").map { it.name }
+                    val wb = items("w4b").map { it.name }
+                    // المفاتيح الجديدة وأسماء الإصدار السابق المجردة
+                    val present = (wa.map { savedKey("wa", it) } + wb.map { savedKey("w4b", it) } + wa + wb).toSet()
+                    val set = prefs().getStringSet("saved", emptySet())!!.filter { it in present }.toSet()
+                    prefs().edit().putStringSet("saved", set).apply()
+                }
+                call.resolve(JSObject().put("saved", ok.size).put("failed", failed))
+            } finally {
+                saving = false
             }
         }.start()
     }

@@ -16,6 +16,9 @@ let mockCookies = false;
 let mockChannel = 'stable';
 
 function mockInfo(url) {
+  // ?delay=ms يؤخر الرد، و?title=… يحدد العنوان: لمحاكاة ردين يصلان بغير ترتيب الطلب
+  const delay = Number((url.match(/[?&]delay=(\d+)/) || [])[1] || 0);
+  if (delay) return new Promise((r) => setTimeout(r, delay)).then(() => mockInfo(url.replace(/[?&]delay=\d+/, '')));
   if (/fail|unsupported/.test(url)) return Promise.reject(new Error('ERROR: Unsupported URL: ' + url));
   if (/login/.test(url)) return Promise.reject(new Error('ERROR: Sign in to confirm you’re not a bot'));
   if (/list=/.test(url)) {
@@ -25,7 +28,8 @@ function mockInfo(url) {
       { id: 'p3', title: 'المقطع الثالث', url: 'https://www.youtube.com/watch?v=p3', duration: 300 },
     ] }) });
   }
-  return Promise.resolve({ json: JSON.stringify({ id: 'demo1', title: 'مقطع تجريبي', uploader: 'قناة تجريبية', duration: 245,
+  const t = (url.match(/[?&]title=([^&]+)/) || [])[1];
+  return Promise.resolve({ json: JSON.stringify({ id: 'demo1', title: t ? decodeURIComponent(t) : 'مقطع تجريبي', uploader: 'قناة تجريبية', duration: 245,
     thumbnail: '', webpage_url: url, formats: [{ height: 1080, vcodec: 'avc1' }, { height: 720, vcodec: 'avc1' }, { height: 360, vcodec: 'avc1' }] }) });
 }
 
@@ -163,7 +167,10 @@ export const AppUpdater = {
 };
 
 // حالات واتساب (StatusPlugin.kt)؛ المحرك الوهمي فيه 4 حالات لواتساب، وواتساب أعمال غير مثبّت
-const mockStatus = { granted: false, saved: new Set() };
+const mockStatus = { granted: false, saved: new Set(), gone: new Set() };
+export const mockStatusControl = { vanish: (name) => mockStatus.gone.add(name) };
+// للاختبارات في المتصفح فقط
+if (!native && typeof window !== 'undefined') window.__mockStatus = mockStatusControl;
 const mockItems = [
   { name: 'a1.jpg', video: false, duration: 0 }, { name: 'a2.mp4', video: true, duration: 15 },
   { name: 'a3.jpg', video: false, duration: 0 }, { name: 'a4.mp4', video: true, duration: 42 },
@@ -171,8 +178,15 @@ const mockItems = [
 const mockStatuses = {
   access: ({ app }) => Promise.resolve({ granted: app === 'wa' && mockStatus.granted, installed: app === 'wa' }),
   request: () => { mockStatus.granted = true; return Promise.resolve({ granted: true }); },
-  list: ({ app }) => Promise.resolve({ items: app === 'wa' ? mockItems.map((i, n) => ({ ...i, size: 1e6, time: Date.now() - n * 6e5, thumb: null, saved: mockStatus.saved.has(i.name) })) : [] }),
-  save: ({ names }) => { names.forEach((n) => mockStatus.saved.add(n)); return Promise.resolve({ saved: names.length }); },
+  list: ({ app }) => Promise.resolve({ items: app === 'wa' ? mockItems.map((i, n) => ({ ...i, size: 1e6, time: Date.now() - n * 6e5, thumb: null, saved: mockStatus.saved.has(`${app}:${i.name}`) })) : [] }),
+  // «gone» = حالة اختفت أثناء الحفظ (تنتهي بعد 24 ساعة)
+  save: ({ app, names }) => {
+    const ok = names.filter((n) => !mockStatus.gone.has(n));
+    ok.forEach((n) => mockStatus.saved.add(`${app}:${n}`));
+    // ما اختفى لم يعد في القائمة عند إعادة قراءتها
+    mockStatus.gone.forEach((n) => { const k = mockItems.findIndex((i) => i.name === n); if (k >= 0) mockItems.splice(k, 1); });
+    return Promise.resolve({ saved: ok.length, failed: names.filter((n) => mockStatus.gone.has(n)).map((name) => ({ name, error: 'الحالة لم تعد موجودة' })) });
+  },
   open: () => Promise.resolve(),
 };
 const ST = StatusesPlugin || mockStatuses;

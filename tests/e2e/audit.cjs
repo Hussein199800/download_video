@@ -9,6 +9,7 @@ const SIZES = {
   'لوحي عمودي': { width: 800, height: 1280 },
   'لوحي أفقي': { width: 1280, height: 800 },
 };
+const VER_RE = require('../../package.json').version.replace(/\./g, '\\.');
 const LONG = 'https://x.com/Moath1531Moath/status/2118446057294348573?s=46&t=a03kdI7IkNZS-u7THHs-very-long-tracking-parameter&s=19';
 
 module.exports = async function audit({ browser, base, newPage, check, shot, text, OUT }) {
@@ -371,6 +372,97 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await tabTo(page, 'library');
     check('إعدادات المكتبة (العرض والفرز) تبقى بعد إعادة التشغيل', await page.locator('.lib-item.list').count() > 0 && await page.inputValue('#lib-sort') === 'size');
     check('لا أخطاء (المكتبة)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 8) المرحلة 1: سباق المعاينة، وحفظ الحالات الجزئي، والجولة و«ما الجديد» ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    const read = async (u) => { await page.fill('#url', u); await page.tap('#go'); };
+    // رد الرابط الأول يصل بعد الثاني: تبقى معاينة الثاني وزرّه مرتبطاً به
+    await read('https://youtu.be/a1?delay=900&title=الأول');
+    await read('https://youtu.be/b2?delay=100&title=الثاني');
+    await page.waitForTimeout(1300);
+    const pv = await page.locator('.result').innerText();
+    check('رد قديم وصل متأخراً لا يستبدل معاينة الرابط الحالي', /الثاني/.test(pv) && !/الأول/.test(pv), pv.slice(0, 120));
+    check('زر «نزّل» مرتبط بالرابط المعروض', /b2/.test(await page.getAttribute('#dl', 'data-url')));
+    // الأول فشل متأخراً: لا تظهر بطاقة خطئه فوق معاينة الثاني
+    await read('https://youtu.be/fail1?delay=700');
+    await read('https://youtu.be/c3?delay=50&title=الثالث');
+    await page.waitForTimeout(1000);
+    check('فشل متأخر لطلب قديم لا يغطي المعاينة الحالية', await page.locator('.err-card').count() === 0 && /الثالث/.test(await page.locator('.result').innerText()));
+    // الأول قائمة تشغيل وصلت متأخرة: لا تُفتح صفحتها
+    await read('https://www.youtube.com/playlist?list=PL1&delay=700');
+    await read('https://youtu.be/d4?delay=50&title=الرابع');
+    await page.waitForTimeout(1000);
+    check('قائمة تشغيل وصلت متأخرة لا تفتح صفحتها فوق الرابط الحالي', !(await page.locator('.pl-list').count()) && /الرابع/.test(await text(page)));
+    // تغيير الرابط يزيل المعاينة القديمة
+    await page.locator('#url').fill('https://youtu.be/other');
+    await page.waitForTimeout(100);
+    check('تغيير الرابط يبطل المعاينة القديمة', await page.locator('.preview').count() === 0);
+    // مغادرة الشاشة أثناء قراءة قائمة: لا تُفتح القائمة بعد العودة
+    await read('https://www.youtube.com/playlist?list=PL1&delay=600');
+    await tabTo(page, 'jobs');
+    await page.waitForTimeout(900);
+    check('مغادرة الرئيسية تبطل القراءة الجارية', !(await page.locator('.pl-list').count()) && /التنزيلات/.test(await text(page)));
+
+    // حالات واتساب: ثلاث محددة تختفي الثالثة أثناء الحفظ
+    await tabTo(page, 'home');
+    await page.tap('#open-statuses');
+    await page.tap('#grant');
+    await page.waitForSelector('.st-grid .st-item');
+    await page.evaluate(() => window.__mockStatus.vanish('a3.jpg'));
+    for (const n of [0, 1, 2]) await page.locator('.st-item .st-check').nth(n).tap();
+    await page.tap('#st-save');
+    await page.waitForTimeout(400);
+    const t1 = await page.locator('.toast').innerText();
+    check('الحفظ الجزئي يذكر الناجح والمتعثر', /حُفظت حالتان/.test(t1) && /تعذّرت حالة واحدة/.test(t1), t1);
+    check('الناجحتان معلّمتان والمختفية أُزيلت من القائمة', await page.locator('.st-item.saved').count() === 2 && await page.locator('.st-item').count() === 3);
+    await page.tap('#st-all');
+    await page.waitForTimeout(400);
+    check('«احفظ الكل» بعد التعثر يحفظ غير المحفوظ فقط', /حُفظت الحالة/.test(await page.locator('.toast').innerText()) && await page.locator('.st-item.saved').count() === 3);
+    check('لا أخطاء (المرحلة 1)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+  {
+    // أول تثبيت: الجولة
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 320'], touch: true, intro: true });
+    await page.waitForSelector('#tour');
+    check('الجولة تظهر عند أول تثبيت', /أهلاً بك في سَيْل/.test(await page.locator('#tour').innerText()));
+    check('لا تمرير أفقي في الجولة على 320', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'tour-320.png') });
+    let steps = 1;
+    while (await page.locator('#tour-skip').count()) { await page.tap('#tour-next'); steps++; if (steps > 10) break; }
+    check('الجولة ست خطوات، والأخيرة بلا «تخطي» وزرها «ابدأ»', steps === 6 && /ابدأ/.test(await page.locator('#tour-next').innerText()), String(steps));
+    await page.tap('#tour-prev');
+    check('«السابق» يعود خطوة', /أدوات الوسائط/.test(await page.locator('#tour').innerText()));
+    await page.tap('#tour-skip');
+    check('«تخطي» يغلق الجولة', await page.locator('#tour').count() === 0);
+    await page.reload();
+    await page.waitForSelector('.tabbar');
+    await page.waitForTimeout(400);
+    check('الجولة لا تتكرر بعد إغلاقها، ولا «ما الجديد» معها', await page.locator('#tour').count() === 0 && await page.locator('#whats-new').count() === 0);
+    await tabTo(page, 'more');
+    await page.tap('#open-tour');
+    check('الجولة تُعاد من «المزيد»', await page.locator('#tour').count() === 1);
+    await page.keyboard.press('Escape');
+    check('زر الرجوع يغلق الجولة', await page.locator('#tour').count() === 0);
+    await page.context().close();
+  }
+  {
+    // مستخدم من إصدار سابق: «ما الجديد» بدل الجولة، مرة واحدة
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true, intro: true, storage: { 'sayl.settings': '{"theme":"dark"}' } });
+    await page.waitForSelector('#whats-new');
+    check('بعد التحديث يظهر «ما الجديد» لا الجولة', await page.locator('#tour').count() === 0 && new RegExp(VER_RE).test(await page.locator('#whats-new').innerText()));
+    await shot(page, { path: path.join(OUT, 'whats-new.png') });
+    await page.tap('#wn-tour');
+    check('«جولة في التطبيق» من «ما الجديد» تفتح الجولة', await page.locator('#tour').count() === 1);
+    await page.tap('#tour-skip');
+    await page.reload();
+    await page.waitForSelector('.tabbar');
+    await page.waitForTimeout(400);
+    check('«ما الجديد» يظهر مرة واحدة فقط', await page.locator('#whats-new').count() === 0);
+    check('لا أخطاء (الجولة)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
   }
 };

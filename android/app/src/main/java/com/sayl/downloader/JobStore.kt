@@ -38,6 +38,8 @@ data class Job(
     val startedAt: Long = 0,
     val finishedAt: Long = 0,
     val order: Long = createdAt,
+    /** رقم محاولة التشغيل: يزيد مع كل بدء، فلا تغيّر محاولة قديمة حالة محاولة أحدث */
+    val run: Int = 0,
 ) {
     /** ما زال في الطابور أو يعمل */
     val active get() = state == "queued" || state == "running" || state == "waiting_network" || state == "retrying"
@@ -51,7 +53,7 @@ data class Job(
         .put("speed", speed).put("downloaded", downloaded).put("total", total).put("eta", eta).put("error", error)
         .put("path", path).put("uri", uri).put("attempts", attempts).put("retryAt", retryAt).put("engine", engine)
         .put("scheduledAt", scheduledAt).put("wifiOnly", wifiOnly).put("createdAt", createdAt).put("startedAt", startedAt)
-        .put("finishedAt", finishedAt).put("order", order)
+        .put("finishedAt", finishedAt).put("order", order).put("run", run)
 
     companion object {
         private fun JSONObject.str(k: String): String? = if (isNull(k)) null else optString(k)
@@ -68,6 +70,7 @@ data class Job(
                 uri = o.str("uri"), attempts = o.optInt("attempts"), retryAt = o.optLong("retryAt"), engine = o.optInt("engine", 1),
                 scheduledAt = o.optLong("scheduledAt"), wifiOnly = o.optBoolean("wifiOnly"), createdAt = created,
                 startedAt = o.optLong("startedAt"), finishedAt = o.optLong("finishedAt"), order = o.optLong("order", created),
+                run = o.optInt("run"),
             )
         }
     }
@@ -122,7 +125,22 @@ class JobStore(private val file: File) {
     @Synchronized
     fun claim(isDue: (Job) -> Boolean = { it.state == "queued" }): Job? {
         val j = next(isDue) ?: return null
-        return update(j.id) { it.copy(state = "running", error = null, retryAt = 0, startedAt = if (it.startedAt > 0) it.startedAt else System.currentTimeMillis()) }
+        return update(j.id) { it.copy(state = "running", error = null, retryAt = 0, run = it.run + 1, startedAt = if (it.startedAt > 0) it.startedAt else System.currentTimeMillis()) }
+    }
+
+    /** تحديث لا يقع إلا إن كانت المحاولة نفسها ما زالت الأحدث؛ null إن سبقتها محاولة أحدث */
+    @Synchronized
+    fun updateRun(id: String, run: Int, fn: (Job) -> Job): Job? {
+        val j = jobs[id] ?: return null
+        if (j.run != run) return null
+        return update(id, fn)
+    }
+
+    @Synchronized
+    fun liveRun(id: String, run: Int, fn: (Job) -> Job): Job? {
+        val j = jobs[id] ?: return null
+        if (j.run != run) return null
+        return live(id, fn)
     }
 
     /** تحديث التقدم في الذاكرة فقط؛ يُحفظ مع أول تغيير حالة */

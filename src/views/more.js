@@ -9,6 +9,7 @@ import { redact } from '../errors.js';
 import { fetchLatest, isNewer, shouldCheck, RELEASES_PAGE, STABLE_APK, plainNotes } from '../update.js';
 import { VERSION } from '../version.js';
 import { CHANGELOG } from '../changelog.js';
+import { openTour } from './tour.js';
 
 export const ABOUT_NAME = 'حسين محمد علي الطويل';
 export const ABOUT_DUA = 'اللهم اغفر له ولوالديه، واجعل هذا العمل صدقة جارية في ميزان حسناتهم.';
@@ -292,6 +293,7 @@ export function moreView({ page, open }) {
     h('h3', { class: 'sec-h' }, 'التطبيق'),
     h('div', { class: 'lcards' },
       check,
+      card('open-tour', { color: 'c-sky', icon: 'book', title: 'جولة في التطبيق', sub: 'كيف تستخدم سَيْل في دقيقة', onClick: () => openTour() }),
       card('open-changes', { color: 'c-amber', icon: 'star', title: 'ما الجديد', sub: 'ما أضيف في كل إصدار', onClick: sub('ما الجديد', changesPage) }),
       card('share-app', { color: 'c-violet', icon: 'share', title: 'مشاركة التطبيق', sub: 'أرسل رابط التحميل لمن تحب', onClick: async () => {
         try {

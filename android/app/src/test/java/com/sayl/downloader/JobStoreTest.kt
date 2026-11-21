@@ -108,4 +108,34 @@ class JobStoreTest {
         assertEquals(listOf("c", "b", "a"), s.queueOrder())
         assertEquals("c", s.claim()!!.id)
     }
+
+    @Test
+    fun staleAttemptCannotOverwriteNewerRun() {
+        val s = JobStore(tmp())
+        s.add(listOf(job("a")))
+        val first = s.claim()!!
+        assertEquals(1, first.run)
+        // إيقاف ثم استكمال سريع: محاولة ثانية تبدأ قبل أن تنتهي الأولى
+        s.pause("a")
+        s.resume("a")
+        val second = s.claim()!!
+        assertEquals(2, second.run)
+        // خطأ المحاولة الأولى المتأخر لا يغيّر حالة الثانية
+        assertNull(s.updateRun("a", first.run) { it.copy(state = "canceled") })
+        assertNull(s.liveRun("a", first.run) { it.copy(pct = 99f) })
+        assertEquals("running", s.get("a")!!.state)
+        assertEquals("done", s.updateRun("a", second.run) { it.copy(state = "done") }!!.state)
+    }
+
+    @Test
+    fun runSurvivesReloadAndOldQueuesDefaultToZero() {
+        val f = tmp()
+        val s = JobStore(f)
+        s.add(listOf(job("a")))
+        s.claim()
+        assertEquals(1, JobStore(f).get("a")!!.run)
+        // طابور الإصدار السابق بلا حقل run
+        f.writeText("""[{"id":"x","url":"u","title":"t","kind":"video","args":[],"state":"queued","createdAt":1}]""")
+        assertEquals(0, JobStore(f).get("x")!!.run)
+    }
 }

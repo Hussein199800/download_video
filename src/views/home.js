@@ -50,12 +50,14 @@ export function errorCard(err, { onRetry } = {}) {
     act && act[1] && h('button', { class: 'btn grad c-pink', 'data-act': c.action, onclick: act[1] }, act[0]));
 }
 
-function preview(info, url) {
+// current: الرابط الموجود في الحقل الآن؛ المعاينة لا تنزّل إلا الرابط الذي قُرئت منه
+function preview(info, url, current) {
   const site = siteOf(url);
   const picker = choicePicker({ heights: info.heights, type: preferType });
   const when = whenPicker();
-  const btn = h('button', { id: 'dl', class: 'btn primary wide' }, ic('download'), 'نزّل');
+  const btn = h('button', { id: 'dl', class: 'btn primary wide', 'data-url': url }, ic('download'), 'نزّل');
   btn.onclick = async () => {
+    if (current() !== url) { toast('تغيّر الرابط؛ اضغط «اقرأ» لقراءة الرابط الجديد', 'bad'); return; }
     btn.disabled = true;
     await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: picker.args(), choice: picker.choice(),
       thumb: info.thumbnail || '', site: site.id, ...when.get() }]);
@@ -73,21 +75,38 @@ export function homeView(ctx) {
   const { page } = ctx;
   const input = h('input', { id: 'url', type: 'url', inputmode: 'url', placeholder: 'الصق رابط الفيديو أو قائمة التشغيل', autocomplete: 'off', enterkeyhint: 'go' });
   const result = h('div', { class: 'result' });
+  // كل قراءة لها رقم؛ لا يُعرض إلا رد آخر قراءة، والقديم الذي يصل متأخراً يُهمل
+  let req = 0;
+  let shownUrl = null;
+  const current = () => extractUrl(input.value);
 
   async function analyze() {
     const url = extractUrl(input.value);
     if (!url) { toast('الصق رابطاً صحيحاً لصفحة الفيديو', 'bad'); return; }
+    const my = ++req;
     input.value = url;
+    shownUrl = null;
     result.replaceChildren(h('div', { class: 'card center' }, h('div', { class: 'spinner' }), h('div', { class: 'muted' }, 'جارٍ قراءة الرابط…')));
     try {
       const info = parseInfo(await Sayl.info(url));
+      if (my !== req) return;
       if (info.kind === 'playlist') { result.replaceChildren(); openPlaylist(ctx, info, url); return; }
-      result.replaceChildren(preview(info, url));
+      shownUrl = url;
+      result.replaceChildren(preview(info, url, current));
     } catch (e) {
+      if (my !== req) return;
       logError('info', e.message);
       result.replaceChildren(errorCard(e, { onRetry: analyze }));
     }
   }
+
+  // تغيير الرابط يبطل القراءة الجارية والمعاينة القديمة
+  input.addEventListener('input', () => {
+    const u = current();
+    if (u === shownUrl) return;
+    req++;
+    if (result.firstChild) { shownUrl = null; result.replaceChildren(); }
+  });
 
   const go = h('button', { id: 'go', class: 'btn primary', onclick: analyze }, 'اقرأ');
   input.addEventListener('keydown', (e) => e.key === 'Enter' && analyze());
@@ -135,4 +154,5 @@ export function homeView(ctx) {
     pendingShared = null;
     analyze();
   }
+  return () => { req++; };
 }

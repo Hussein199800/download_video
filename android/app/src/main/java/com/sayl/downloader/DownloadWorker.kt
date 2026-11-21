@@ -55,31 +55,48 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
     private fun run(job: Job) {
         Bus.emit("state", job)
         val work = workDir(applicationContext, job.id)
+        // كل تحديث في هذه المحاولة مشروط بأنها ما زالت الأحدث (إيقاف ثم استكمال سريع يبدأ محاولة جديدة)
+        val mine = { store.get(job.id)?.run == job.run }
         try {
             val file = if (job.engine == 2) server2(job, work) else server1WithFallback(job, work)
+            // أُلغيت أو أُوقفت أو بدأت محاولة أحدث قبل الحفظ: لا ننشر شيئاً
+            val before = store.get(job.id)
+            if (before == null || !mine() || before.state == "canceled") throw Server2.Canceled()
             val saved = Saver.publish(applicationContext, file, job.folder)
             // روابط «عدة روابط» تُضاف بعنوان الرابط نفسه؛ نأخذ العنوان الحقيقي من اسم الملف
             val title = if (job.title == job.url) file.nameWithoutExtension.replace(Regex(" \\[[^\\]]+]$"), "") else job.title
-            finish(store.update(job.id) { it.copy(state = "done", title = title, pct = 100f, path = saved.path, uri = saved.uri, error = null, speed = 0, finishedAt = System.currentTimeMillis()) })
+            val now = System.currentTimeMillis()
+            // الإيقاف أثناء النسخ بعد اكتمال التنزيل لا معنى له: الملف كامل فيُعدّ مكتملاً. الإلغاء أثناءه يحذف المنشور.
+            val after = store.updateRun(job.id, job.run) {
+                if (it.state == "canceled") it
+                else it.copy(state = "done", title = title, pct = 100f, path = saved.path, uri = saved.uri, error = null, speed = 0, finishedAt = now)
+            }
+            if (after == null || after.state != "done") {
+                Saver.delete(applicationContext, saved.uri)
+                after?.let { Bus.emit("state", it) }
+                return
+            }
+            finish(after)
         } catch (e: Exception) {
+            if (!mine()) return
             val st = store.get(job.id)?.state
             if (e is YoutubeDL.CanceledException || e is Server2.Canceled || st == "canceled" || st == "paused") {
                 // الإيقاف المؤقت يقتل العملية أيضاً؛ نُبقي حالته وملفه الجزئي
                 if (st == "paused") Bus.emit("state", store.get(job.id)!!)
-                else finish(store.update(job.id) { it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) })
+                else finish(store.updateRun(job.id, job.run) { it.copy(state = "canceled", finishedAt = System.currentTimeMillis()) })
                 return
             }
             failed(job, (e.message ?: e.toString()).take(4000))
         } finally {
-            // الملف الجزئي يبقى للاستكمال ما دامت المهمة موقوفة أو ستُعاد
+            // الملف الجزئي يبقى للاستكمال ما دامت المهمة موقوفة أو ستُعاد، ولا تحذف محاولة قديمة ملفات محاولة أحدث
             val st = store.get(job.id)?.state
-            if (st == null || st == "done" || st == "canceled" || st == "failed") work.deleteRecursively()
+            if (mine() && (st == null || st == "done" || st == "canceled" || st == "failed")) work.deleteRecursively()
         }
     }
 
     private fun server1(job: Job, work: File): File {
         val cookies = Bus.cookies(applicationContext).takeIf { it.exists() }
-        return Engine.download(applicationContext, job.id, job.url, job.args, work, cookies) { pct, eta, line -> progress(job.id, pct, eta, line) }
+        return Engine.download(applicationContext, job.id, job.url, job.args, work, cookies) { pct, eta, line -> progress(job, pct, eta, line) }
     }
 
     /** السيرفر 1؛ وعند فشل قابل للإصلاح: تحديث yt-dlp ثم إعادته، ثم السيرفر 2 إن كان يدعم الرابط */
@@ -100,7 +117,7 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
                         runCatching { Engine.update(applicationContext) }
                     }
                     ServerPolicy.Step.SERVER2 -> {
-                        val j = store.update(job.id) { it.copy(engine = 2, pct = 0f, downloaded = 0, total = 0) } ?: throw e
+                        val j = store.updateRun(job.id, job.run) { it.copy(engine = 2, pct = 0f, downloaded = 0, total = 0) } ?: throw e
                         Bus.emit("state", j)
                         return server2(j, work)
                     }
@@ -112,19 +129,20 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
 
     private fun server2(job: Job, work: File): File =
         Server2.download(applicationContext, job, File(work, "s2")) { pct, eta, done, total, speed ->
-            liveProgress(job.id) { it.copy(pct = if (pct >= 0) pct.coerceIn(0f, 100f) else it.pct, eta = eta, downloaded = done, total = total, speed = speed) }
+            liveProgress(job) { it.copy(pct = if (pct >= 0) pct.coerceIn(0f, 100f) else it.pct, eta = eta, downloaded = done, total = total, speed = speed) }
         }
 
-    private fun progress(id: String, pct: Float, eta: Long, line: String) {
+    private fun progress(job: Job, pct: Float, eta: Long, line: String) {
         val p = Progress.parse(line)
-        liveProgress(id) {
+        liveProgress(job) {
             it.copy(pct = if (pct >= 0) pct.coerceIn(0f, 100f) else it.pct, eta = eta, speed = p.speed ?: it.speed,
                 downloaded = p.downloaded ?: it.downloaded, total = p.total ?: it.total)
         }
     }
 
-    private fun liveProgress(id: String, fn: (Job) -> Job) {
-        val j = store.live(id, fn) ?: return
+    private fun liveProgress(job: Job, fn: (Job) -> Job) {
+        val id = job.id
+        val j = store.liveRun(id, job.run, fn) ?: return
         val now = System.currentTimeMillis()
         if (now - (lastEmit[id] ?: 0) >= 500) {
             lastEmit[id] = now
@@ -139,11 +157,11 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
         val now = System.currentTimeMillis()
         val n = when {
             // انقطاع الشبكة لا يُحسب محاولة: ننتظر عودتها ثم نكمل
-            kind == Failure.Kind.NETWORK -> store.update(job.id) { it.copy(state = "waiting_network", error = msg, speed = 0, eta = -1) }
-            Retry.shouldRetry(kind, job.attempts, max) -> store.update(job.id) {
+            kind == Failure.Kind.NETWORK -> store.updateRun(job.id, job.run) { it.copy(state = "waiting_network", error = msg, speed = 0, eta = -1) }
+            Retry.shouldRetry(kind, job.attempts, max) -> store.updateRun(job.id, job.run) {
                 it.copy(state = "retrying", attempts = it.attempts + 1, retryAt = now + Retry.delayMs(it.attempts + 1), error = msg, speed = 0, eta = -1)
             }
-            else -> store.update(job.id) { it.copy(state = "failed", error = msg, speed = 0, finishedAt = now) }
+            else -> store.updateRun(job.id, job.run) { it.copy(state = "failed", error = msg, speed = 0, finishedAt = now) }
         }
         finish(n)
     }

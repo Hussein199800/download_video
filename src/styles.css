@@ -384,6 +384,18 @@ bdi { unicode-bidi: isolate; }
 .clip-bubble .cb-x { width: var(--tap); height: var(--tap); padding: .8rem; border: 0; background: none; color: var(--mute); cursor: pointer; flex: none; border-radius: 50%; }
 .clip-bubble.out { animation: down .2s ease forwards; }
 
+/* ---------- الجولة التعريفية ---------- */
+.modal.tour { align-items: center; padding: calc(1rem + var(--safe-top)) 1rem calc(1rem + var(--safe-bot)); }
+.tour-b { position: relative; width: 100%; max-width: 28rem; margin: 0 auto; background: var(--surface); border-radius: var(--r-xl); padding: 1.75rem 1.25rem 1.25rem; display: grid; justify-items: center; gap: .625rem; text-align: center; animation: up .25s ease; box-shadow: var(--shadow); max-height: 100%; overflow: auto; }
+.tour-skip { position: absolute; top: .25rem; inset-inline-end: .75rem; font-size: var(--fz-sm); }
+.tour-ic { width: 5rem; height: 5rem; padding: 1.25rem; border-radius: 1.5rem; color: #fff; background: linear-gradient(145deg, var(--g1), var(--g2)); box-shadow: 0 .75rem 1.75rem -.6rem var(--g2); margin-bottom: .25rem; }
+.tour-b h2 { margin: 0; font-size: var(--fz-xl); }
+.tour-b p { margin: 0; line-height: 1.8; color: var(--mute); }
+.tour-dots { display: flex; gap: .375rem; margin: .375rem 0; }
+.tour-dots i { width: .5rem; height: .5rem; border-radius: var(--r-pill); background: var(--line); transition: width .2s; }
+.tour-dots i.on { width: 1.5rem; background: var(--pri); }
+.tour-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; width: 100%; }
+
 /* ---------- نوافذ وإشعارات ---------- */
 .toast { position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + 1.5rem); transform: translate(-50%, 1.25rem); opacity: 0; z-index: 40; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); padding: .625rem 1.125rem; border-radius: .875rem; font-weight: var(--fw-b); transition: all .3s; max-width: min(90vw, 28rem); text-align: center; pointer-events: none; overflow-wrap: anywhere; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }

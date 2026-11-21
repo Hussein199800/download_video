@@ -4,6 +4,8 @@ import { getSettings, migrate } from './store.js';
 import { applyTheme } from './theme.js';
 import { watchLayout } from './layout.js';
 import { suggestClip, hideBubble } from './clip.js';
+import { intro } from './views/tour.js';
+import { doneJobs } from './state.js';
 import { startSync, onJobs, activeJobs } from './state.js';
 import { startTasks, onTasks, activeTasks } from './tasks.js';
 import { Sayl, isNative } from './native.js';
@@ -74,6 +76,8 @@ function badge() {
 }
 
 async function boot() {
+  // مستخدم من إصدار سابق؟ يُحسب قبل migrate لأنها تكتب الإعدادات من أول تشغيل
+  const existing = Boolean(localStorage.getItem('sayl.settings') || localStorage.getItem('sayl.meta'));
   migrate();
   applyTheme();
   watchLayout();
@@ -99,7 +103,11 @@ async function boot() {
   const launch = await Sayl.takeLaunch().catch(() => ({}));
   if (launch.text) openUrl(launch.text);
   else if (launch.paste) pasteNow();
-  else setTimeout(() => suggestClip(openUrl), 500);
+  else {
+    // الجولة أو «ما الجديد» عند الفتح العادي فقط، لا عند الفتح بمشاركة رابط
+    intro({ existing: existing || doneJobs().length > 0 });
+    setTimeout(() => suggestClip(openUrl), 500);
+  }
   Sayl.onShared(openUrl);
   Sayl.onPasteRequest(pasteNow);
   // العودة إلى التطبيق: اقتراح الرابط المنسوخ دون إعادة رسم الصفحة (يبقى ما كُتب كما هو)

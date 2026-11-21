@@ -45,13 +45,22 @@ export function openStatuses(ctx) {
       const sel = new Set();
       const save = h('button', { id: 'st-save', class: 'btn grad c-wa', disabled: true });
       const sync = () => { save.disabled = !sel.size; save.replaceChildren(ic('download'), sel.size ? `احفظ ${sel.size}` : 'احفظ المحدد'); };
+      let busy = false;
       const doSave = async (names) => {
-        if (!names.length) return;
+        if (!names.length || busy) return;
+        // لا ضغطتان متزامنتان: الزران معطّلان حتى ينتهي الحفظ
+        busy = true;
+        body.querySelectorAll('.st-acts .btn').forEach((b) => { b.disabled = true; });
         try {
-          await Statuses.save(app, names);
-          toast(names.length > 1 ? `حُفظت ${count(names.length, W.status)}` : 'حُفظت الحالة', 'ok');
-          grid(await Statuses.list(app));
+          const r = await Statuses.save(app, names);
+          const failed = r.failed || [];
+          if (!failed.length) toast(r.saved > 1 ? `حُفظت ${count(r.saved, W.status)}` : 'حُفظت الحالة', 'ok');
+          else if (!r.saved) toast(failed.length > 1 ? `تعذّر حفظ ${count(failed.length, W.status)}؛ ربما اختفت` : 'تعذّر حفظ الحالة؛ ربما اختفت', 'bad');
+          else toast(`حُفظت ${count(r.saved, W.status)}، وتعذّرت ${count(failed.length, W.status)} اختفت غالباً`, 'bad');
         } catch (e) { toast(e.message, 'bad'); }
+        busy = false;
+        // إعادة القراءة بعد كل محاولة: المحفوظ يُعلَّم، والمتعثر يبقى قابلاً للتحديد
+        try { grid(await Statuses.list(app)); } catch (e) { toast(e.message, 'bad'); }
       };
       save.onclick = () => doSave([...sel]);
       const cells = items.map((it) => {
