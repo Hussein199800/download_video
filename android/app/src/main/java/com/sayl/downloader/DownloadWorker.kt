@@ -57,6 +57,8 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
         val work = workDir(applicationContext, job.id)
         // كل تحديث في هذه المحاولة مشروط بأنها ما زالت الأحدث (إيقاف ثم استكمال سريع يبدأ محاولة جديدة)
         val mine = { store.get(job.id)?.run == job.run }
+        // علامة «رُفضت الترجمة» تخص هذه المحاولة فقط
+        SUBS_FAILED.remove(job.id)
         try {
             val file = when (job.engine) {
                 2 -> server2(job, work)

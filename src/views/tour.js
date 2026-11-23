@@ -4,6 +4,7 @@ import { h, ic, sheet } from '../ui.js';
 import { getMeta, setMeta } from '../store.js';
 import { VERSION } from '../version.js';
 import { CHANGELOG } from '../changelog.js';
+import { isNewer } from '../update.js';
 
 // خطوة لكل تبويب بلونه وأيقونته
 export const TOUR = [
@@ -86,5 +87,7 @@ export function intro({ existing }) {
   const m = getMeta();
   if (!m.tourSeen && !existing) return openTour();
   if (!m.tourSeen) setMeta({ tourSeen: true });
-  if (m.seenVersion !== VERSION) openWhatsNew();
+  // بعد تحديث فقط: لا عند الرجوع إلى إصدار أقدم (تثبيت نسخة سابقة)
+  if (!m.seenVersion || isNewer(VERSION, m.seenVersion)) openWhatsNew();
+  else if (m.seenVersion !== VERSION) setMeta({ seenVersion: VERSION });
 }

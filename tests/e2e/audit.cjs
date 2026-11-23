@@ -12,6 +12,9 @@ const SIZES = {
 const VER_RE = require('../../package.json').version.replace(/\./g, '\\.');
 const LONG = 'https://x.com/Moath1531Moath/status/2118446057294348573?s=46&t=a03kdI7IkNZS-u7THHs-very-long-tracking-parameter&s=19';
 
+// علامات العزل الاتجاهي (أسماء الملفات العربية) لا تهم المقارنة
+const clean = (t) => String(t).replace(/[\u2066-\u2069]/g, '');
+
 module.exports = async function audit({ browser, base, newPage, check, shot, text, OUT }) {
   const wide = (page) => page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   const tap = async (page, sel) => { await page.locator(sel).first().scrollIntoViewIfNeeded(); await page.tap(sel); };
@@ -502,7 +505,13 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('«إعادة المتعثرة» تنزّل الثلاث فقط ثم تختفي البطاقة', await page.locator('[data-group]').count() === 0);
     await tabTo(page, 'library');
     await page.tap('#open-history');
-    check('الصور في مجلد المنشور مرقّمة بترتيب المصدر', /تيك توك ← رحلة الشتاء \[7000000000000000001\] ← 007\.jpg/.test(await text(page)));
+    const hist = await page.locator('[data-album]').allInnerTexts();
+    check('السجل: الألبوم سطر واحد بعدد صوره ومجلد المنشور', hist.length === 1 && /50 صورة/.test(hist[0]) && /تيك توك\u2069? ← \u2068?رحلة الشتاء \[7000000000000000001\]/.test(hist[0]), hist.join(' | ').replace(/\s+/g, ' '));
+    await page.locator('#view .chips button', { hasText: 'صور' }).tap();
+    check('تصفية السجل بالصور تُبقي الألبوم فقط', await page.locator('#view .lcards > .lcard').count() === 1);
+    await page.tap('[data-album]');
+    await page.waitForSelector('.lib-item');
+    check('الضغط على الألبوم في السجل يفتح المكتبة', await page.locator('.tabbar [data-tab="library"].on').count() === 1);
     // الرابط المختصر للمنشور نفسه: كل شيء محفوظ ولا شيء محدد
     await tabTo(page, 'home');
     await page.fill('#url', 'https://vm.tiktok.com/ZMabc/?n=50');
@@ -593,12 +602,12 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForSelector('.lib-item');
     await page.locator('#lib-q').fill('درس القص');
     await page.waitForTimeout(300);
-    const names = await page.locator('.lib-item').allInnerTexts();
+    const names = (await page.locator('.lib-item').allInnerTexts()).map(clean);
     const flat = names.join(' | ').replace(/\s+/g, ' ');
     check('الجزء محفوظ بجانب الأصل والكامل حُذف', /درس القص \(مقطع\)\.mp4/.test(flat) && !names.some((n) => /درس القص\.mp4/.test(n)), flat.slice(0, 300));
     check('ونسخة الواتساب من الجزء نفسه', /درس القص \(مقطع\) \(مضغوط\)\.mp4/.test(flat));
     check('كلاهما في مجلد المنصة لا في «معالَج»', !/معالَج/.test(flat), flat.slice(0, 300));
-    await page.locator('.lib-item', { hasText: 'درس القص (مقطع).mp4' }).first().tap();
+    await page.locator('.lib-item', { hasText: /درس القص \(مقطع\)\u2066?\.mp4/ }).first().tap();
     await page.waitForSelector('.sheet .kv');
     const det = await page.locator('.sheet').innerText();
     check('التفاصيل: الترجمة العربية ملف SRT بجانبه', /الترجمة[\s\S]*العربية · ملف \u2068?SRT\u2069? بجانبه/.test(det), det.replace(/\s+/g, ' ').slice(0, 300));
@@ -621,7 +630,7 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForSelector('.lib-item');
     await page.locator('#lib-q').fill('مشاركة سريعة');
     await page.waitForTimeout(300);
-    const flat = (await page.locator('.lib-item').allInnerTexts()).join(' | ').replace(/\s+/g, ' ');
+    const flat = ((await page.locator('.lib-item').allInnerTexts()).map(clean)).join(' | ').replace(/\s+/g, ' ');
     check('بلمسة واحدة: الفيديو ونسخته للواتساب', /مشاركة سريعة\.mp4/.test(flat) && /مشاركة سريعة \(مضغوط\)\.mp4/.test(flat), flat.slice(0, 300));
     // «اختيار مفصّل» يفتح المعاينة دون إضافة
     await page.evaluate(() => window.__share('https://www.youtube.com/watch?v=q2'));

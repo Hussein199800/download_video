@@ -323,15 +323,14 @@ export function moreView({ page, open }) {
 
   const settingsTab = () => [h('div', { class: 'lcards' },
     card('open-settings', { color: 'c-slate', icon: 'gear', title: 'الإعدادات', sub: 'المظهر، والجودة، والسرعة، والسيرفرات، و«احفظ بطريقتي»', onClick: sub('الإعدادات', settingsPage) }),
-    card('open-engine', { color: 'c-sky', icon: 'servers', title: 'المكوّنات والسيرفرات', sub: 'سيرفر 1 و2 و3 والتحديثات', onClick: sub('المكوّنات والسيرفرات', componentsPage) }),
+    card('open-engine', { color: 'c-sky', icon: 'servers', title: 'المكوّنات والسيرفرات', sub: 'السيرفرات الثلاثة، وFFmpeg، والتحديثات', onClick: sub('المكوّنات والسيرفرات', componentsPage) }),
     card('open-cookies', { color: 'c-green', icon: 'cookie', title: 'ملف cookies', sub: 'للمحتوى الخاص أو الذي يحتاج تسجيل دخول', onClick: sub('ملف cookies', cookiesPage) }))];
 
   const helpTab = () => [
     h('div', { class: 'lcards' },
       card('open-tour', { color: 'c-sky', icon: 'book', title: 'جولة في التطبيق', sub: 'كيف تستخدم سَيْل في دقيقة', onClick: () => openTour() }),
       card('open-log', { color: 'c-pink', icon: 'bug', title: 'سجل التشخيص', sub: 'آخر الأخطاء لإرسالها للمطوّر', onClick: sub('سجل التشخيص', logPage) })),
-    h('h3', { class: 'sec-h' }, 'الشرح'),
-    guideList(),
+    ...guideList(),
   ];
 
   const appTab = () => {
