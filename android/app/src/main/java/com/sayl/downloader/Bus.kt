@@ -40,6 +40,13 @@ object Bus {
     fun parallel(ctx: Context): Int = prefs(ctx).getInt("parallel", 1).coerceIn(1, 3)
     fun setParallel(ctx: Context, n: Int) = prefs(ctx).edit().putInt("parallel", n.coerceIn(1, 3)).apply()
 
+    /** التبديل التلقائي بين السيرفرات عند الفشل (يُطفأ من الإعدادات) */
+    fun autoServer(ctx: Context): Boolean = prefs(ctx).getBoolean("autoServer", true)
+    fun setAutoServer(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("autoServer", on).apply()
+
+    /** رقم السيرفر في الواجهة (1، 2، 3) إلى المحرك في المهمة؛ 3 = صور تيك توك، 4 = فيديو تيك توك */
+    fun engineOf(server: Int): Int? = when (server) { 1 -> 1; 2 -> 2; 3 -> 4; else -> null }
+
     fun maxRetries(ctx: Context): Int = prefs(ctx).getInt("retries", 5).coerceIn(0, 10)
 
     fun window(ctx: Context): Schedule.Window = prefs(ctx).let {

@@ -9,6 +9,10 @@ import { activeJobs, allJobs, onJobs, refreshJobs, forget } from '../state.js';
 import { showDetails } from './details.js';
 import { scheduleLabel, retryLabel } from '../schedule.js';
 import { getSettings } from '../store.js';
+import { SERVERS, serversFor, serverOf } from '../servers.js';
+
+// سيرفرات أخرى تدعم رابط المهمة غير الذي فشل (صور تيك توك لها طريقها الخاص)
+const otherServers = (j) => (serverOf(j.engine) ? serversFor(j.url).filter((n) => n !== serverOf(j.engine)) : []);
 
 const STATE = {
   queued: ['في الانتظار', ''], running: ['يُنزَّل', 'run'], paused: ['موقوف', 'warn'], waiting_network: ['بانتظار الشبكة', 'warn'],
@@ -32,7 +36,7 @@ function jobCard(j) {
   return h('div', { class: `job ${color}`, 'data-id': j.id },
     h('div', { class: 'job-h' }, ic(j.kind === 'audio' ? 'audio' : 'video', 'job-ic'),
       h('button', { class: 'job-t', onclick: () => showDetails(j) }, h('b', { class: 'more', dir: j.title && j.title !== j.url ? 'auto' : 'ltr' }, j.title || j.url),
-        h('small', { dir: j.folder ? 'auto' : 'ltr' }, [j.engine === 2 ? 'سيرفر 2' : '', j.folder ? `📁 ${j.folder}` : String(j.url).replace(/^https?:\/\/(www\.)?/, '')].filter(Boolean).join(' · '))),
+        h('small', { dir: j.folder ? 'auto' : 'ltr' }, [j.engine === 2 || j.engine === 4 ? SERVERS[serverOf(j.engine)].name : '', j.folder ? `📁 ${j.folder}` : String(j.url).replace(/^https?:\/\/(www\.)?/, '')].filter(Boolean).join(' · '))),
       h('span', { class: `tag ${cls}` }, label)),
     (j.state === 'running' || pending) && h('div', { class: `bar${running ? '' : ' wait'}` }, h('i', { style: `width:${running ? j.pct : 30}%` })),
     j.state === 'paused' && j.pct > 0 && h('div', { class: 'bar paused' }, h('i', { style: `width:${j.pct}%` })),
@@ -47,6 +51,8 @@ function jobCard(j) {
       pending && act('down', '', () => Sayl.move(j.id, 1), '', 'للأسفل'),
       (j.state === 'running' || pending || j.state === 'paused') && act('x', 'إلغاء', () => Sayl.cancel(j.id), 'danger'),
       (j.state === 'failed' || j.state === 'canceled') && act('retry', 'إعادة المحاولة', () => Sayl.retry(j.id), 'primary'),
+      // جرّب سيرفراً آخر يدعم الرابط
+      ...(j.state === 'failed' ? otherServers(j).map((n) => act('servers', `جرّب ${SERVERS[n].name}`, () => Sayl.retry(j.id, n))) : []),
       (j.state === 'failed' || j.state === 'canceled') && act('trash', 'حذف', async () => { await Sayl.remove(j.id); forget(j.id); })),
   );
 }

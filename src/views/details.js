@@ -15,7 +15,7 @@ export function showDetails(j) {
   const rows = [
     ['الحالة', STATE[j.state] || j.state],
     ['الموقع', siteOf(j.url).name],
-    ['السيرفر', j.engine === 2 ? 'سيرفر 2 (NewPipe)' : 'سيرفر 1 (yt-dlp)'],
+    ['السيرفر', j.engine === 3 ? 'صفحة المنشور' : { 1: 'سيرفر 1 (yt-dlp)', 2: 'سيرفر 2 (NewPipe)', 4: 'سيرفر 3 (صفحة تيك توك)' }[j.engine || 1]],
     ['الحجم', j.total ? fmtBytes(j.total) : j.downloaded ? fmtBytes(j.downloaded) : '—'],
     ['متوسط السرعة', avgSpeed(j) ? `${fmtBytes(avgSpeed(j))}/ث` : '—'],
     ['المحاولات', String(j.attempts || 0)],

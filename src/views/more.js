@@ -97,7 +97,7 @@ export async function autoChecks() {
 // إرسال إعدادات الطابور إلى Kotlin (يعمل والتطبيق مغلق)
 export function syncNative() {
   const s = getSettings();
-  return Sayl.setConfig({ parallel: s.parallel, retries: s.retries, window: s.window }).catch(() => {});
+  return Sayl.setConfig({ parallel: s.parallel, retries: s.retries, window: s.window, autoServer: s.autoServer }).catch(() => {});
 }
 
 // نافذة التنزيل: الطابور لا يعمل إلا بين وقتين (مثلاً باقة ليلية)
@@ -198,6 +198,7 @@ function settingsPage({ page }) {
         chips([1, 2, 3].map((n) => ({ value: n, label: String(n) })), s.parallel, (v) => { set({ parallel: v }, parRow); syncNative(); })),
       connRow = setting('عدد الاتصالات', 'كم جزءاً يُنزَّل من الملف في الوقت نفسه. 4 مناسب لأغلب الشبكات، و8 للإنترنت السريع.',
         chips([2, 4, 8].map((n) => ({ value: n, label: String(n) })), s.connections, (v) => set({ connections: v }, connRow), 'c-sky')),
+      sw('التبديل التلقائي بين السيرفرات', 'إن فشل التنزيل يجرّب سَيْل سيرفراً آخر يدعم الرابط وحده (سيرفر 2 ليوتيوب، وسيرفر 3 لتيك توك). أطفئه لتختار أنت من بطاقة التنزيل.', 'autoServer', () => syncNative()),
       sw('محرّك aria2c', 'أسرع في المواقع العادية، وقد يبطئ يوتيوب لأنه يخنق الاتصالات الكثيرة. اتركه مطفأً إن لم تحتجه.', 'aria2'),
       retryRow = setting('إعادة المحاولة تلقائياً', 'عند فشل مؤقت يعيد سَيْل المحاولة وحده بعد 30 ثانية ثم دقيقتين ثم 10 دقائق، ويكمل من حيث توقف. انقطاع الإنترنت لا يُحسب محاولة.',
         chips([{ value: 0, label: 'بلا' }, ...[3, 5, 10].map((n) => ({ value: n, label: count(n, W.time) }))], s.retries, (v) => { set({ retries: v }, retryRow); syncNative(); })),
@@ -242,6 +243,7 @@ function componentsPage({ page }) {
           h('div', { class: 'kv-row' }, h('span', {}, 'آخر تحديث'), h('small', {}, fmtDate(c.ytdlpUpdatedAt) || 'لم يُحدَّث بعد')), channelSeg)),
       comp('c-violet', 'servers', 'سيرفر 2: NewPipe', 'بديل تلقائي ليوتيوب وساوندكلاود وباندكامب عند تعطل الأول', dot('ok', 'جاهز'),
         h('div', { class: 'comp-b' }, h('div', { class: 'kv-row' }, h('span', {}, 'الإصدار'), h('small', { class: 'ltr' }, c.server2 || '')))),
+      comp('c-pink', 'servers', 'سيرفر 3: صفحة تيك توك', 'يقرأ فيديو تيك توك من صفحته مباشرة دون طرف ثالث، بديلاً تلقائياً عند تعطل الأول', dot('ok', 'جاهز')),
       comp('c-amber', 'video', 'FFmpeg', 'دمج الصوت والصورة والتحويل إلى MP3', dot(c.ffmpeg ? 'ok' : 'bad', c.ffmpeg ? 'جاهز' : 'غير موجود')),
       comp('c-slate', 'bolt', 'aria2c', 'محرّك اختياري من الإعدادات', dot(c.aria2c ? 'ok' : 'bad', c.aria2c ? 'جاهز' : 'غير موجود')));
   };

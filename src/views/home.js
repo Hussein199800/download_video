@@ -74,7 +74,7 @@ async function saveQuick(info, url, p) {
   const choice = quickChoice(p);
   const s = getSettings();
   await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: choice.type, args: buildArgs(choice, { aria2: s.aria2, connections: s.connections }), choice,
-    thumb: info.thumbnail || '', site: siteOf(url).id, scheduledAt: 0, wifiOnly: false }]);
+    server: info.server || undefined, thumb: info.thumbnail || '', site: siteOf(url).id, scheduledAt: 0, wifiOnly: false }]);
 }
 
 // current: الرابط الموجود في الحقل الآن؛ المعاينة لا تنزّل إلا الرابط الذي قُرئت منه
@@ -91,7 +91,7 @@ function preview(info, url, current) {
     const choice = { ...picker.choice(), ...(x.subs && { subs: x.subs }), ...(x.after && { after: x.after }) };
     const s = getSettings();
     btn.disabled = true;
-    await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: buildArgs(choice, { aria2: s.aria2, connections: s.connections }), choice,
+    await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: buildArgs(choice, { aria2: s.aria2, connections: s.connections }), choice, server: x.server,
       thumb: info.thumbnail || '', site: site.id, ...when.get() }]);
     btn.disabled = false;
   };
@@ -100,6 +100,8 @@ function preview(info, url, current) {
       info.thumbnail ? h('img', { class: 'thumb', src: info.thumbnail, alt: '', referrerpolicy: 'no-referrer', onerror: (e) => e.target.replaceWith(ic('video', 'thumb ph')) }) : ic('video', 'thumb ph'),
       h('div', { class: 'pv-txt' }, h('b', { class: 'more', style: '--lines:3', dir: 'auto' }, info.title),
         h('small', {}, [site.name, info.uploader, fmtDur(info.duration)].filter(Boolean).join(' · ')))),
+    // السيرفر 1 لم يقرأ الرابط فقرأه السيرفر 3: يُنزَّل به مباشرة
+    info.server === 3 && h('p', { class: 'hint', id: 'via-s3' }, 'قرأ السيرفر 3 هذا الفيديو من صفحة تيك توك نفسها، وسيُنزَّل به.'),
     picker.el, extras.el, when.el, btn);
 }
 

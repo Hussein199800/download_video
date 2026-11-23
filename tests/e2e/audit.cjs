@@ -646,4 +646,47 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('لا أخطاء («احفظ بطريقتي»)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
   }
+
+  // ---------- 12) السيرفر 3 لتيك توك: التبديل التلقائي والاختيار اليدوي ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    // yt-dlp لم يقرأ الفيديو فقرأه السيرفر 3
+    await page.fill('#url', 'https://www.tiktok.com/@dancer/video/7?s3');
+    await page.tap('#go');
+    await page.waitForSelector('#dl');
+    check('المعاينة تذكر أن السيرفر 3 قرأ الفيديو', await page.locator('#via-s3').isVisible());
+    await page.tap('#extras summary');
+    check('اختيار السيرفر: تلقائي و1 و3 لتيك توك، والمختار 3', (await page.locator('#server-box .chips-sel button').allInnerTexts()).join(',') === 'تلقائي,سيرفر 1,سيرفر 3'
+      && /سيرفر 3/.test(await page.locator('#server-box .chips-sel button.on').innerText()));
+    await shot(page, { path: path.join(OUT, 'server3-preview.png'), fullPage: true });
+    // التبديل التلقائي: فشل السيرفر 1 فانتقل وحده إلى 3
+    await page.fill('#url', 'https://www.tiktok.com/@a/video/1?ttbad&slow');
+    await page.tap('#go');
+    await page.waitForSelector('#dl[data-url*="ttbad"]');
+    await page.tap('#dl');
+    await tabTo(page, 'jobs');
+    await page.waitForTimeout(600);
+    check('التبديل التلقائي إلى السيرفر 3 ظاهر في البطاقة', /سيرفر 3/.test(await page.locator('.job').first().innerText()));
+    await page.locator('.job [data-act="إلغاء"]').first().tap();
+    // إيقاف التبديل التلقائي: الفشل يعرض «جرّب سيرفر 3»
+    await tabTo(page, 'more');
+    await tap(page, '#open-settings');
+    await page.locator('label:has(input.sw)', { hasText: 'التبديل التلقائي بين السيرفرات' }).tap();
+    await tabTo(page, 'home');
+    await page.fill('#url', 'https://www.tiktok.com/@a/video/2?ttbad');
+    await page.tap('#go');
+    await page.waitForSelector('#dl[data-url*="video/2"]');
+    await page.tap('#dl');
+    await tabTo(page, 'jobs');
+    await page.waitForSelector('.job [data-act="جرّب سيرفر 3"]');
+    check('دون تبديل تلقائي: يفشل ويعرض «جرّب سيرفر 3»', true);
+    check('لا يعرض سيرفر 2 لتيك توك', await page.locator('.job [data-act="جرّب سيرفر 2"]').count() === 0);
+    await shot(page, { path: path.join(OUT, 'server3-failed.png') });
+    await page.locator('.job [data-act="جرّب سيرفر 3"]').first().tap();
+    await page.waitForTimeout(1500);
+    check('«جرّب سيرفر 3» ينزّل الفيديو', await page.locator('.job [data-act="جرّب سيرفر 3"]').count() === 0 && await page.locator('.job .tag.bad').count() === 0,
+      (await page.locator('#view').innerText()).replace(/\s+/g, ' ').slice(0, 300));
+    check('لا أخطاء (السيرفر 3)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
 };

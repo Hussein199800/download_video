@@ -9,6 +9,8 @@ export const DEFAULTS = Object.freeze({
   connections: 4, retries: 5, window: Object.freeze({ on: false, from: '01:00', to: '07:00' }),
   // «احفظ بطريقتي» عند مشاركة رابط، وطرقها
   shareAsk: true, quick: DEFAULT_QUICK,
+  // التبديل التلقائي بين السيرفرات عند الفشل
+  autoServer: true,
 });
 const VIDEO = ['best', 2160, 1440, 1080, 720, 480, 360];
 
@@ -31,6 +33,7 @@ function sanitize(s) {
     connections: oneOf(Number(s.connections), [2, 4, 8], DEFAULTS.connections),
     retries: oneOf(Number(s.retries), [0, 3, 5, 10], DEFAULTS.retries),
     shareAsk: typeof s.shareAsk === 'boolean' ? s.shareAsk : DEFAULTS.shareAsk,
+    autoServer: typeof s.autoServer === 'boolean' ? s.autoServer : DEFAULTS.autoServer,
     quick: sanitizeQuick(s.quick),
     window: {
       on: Boolean(s.window?.on),

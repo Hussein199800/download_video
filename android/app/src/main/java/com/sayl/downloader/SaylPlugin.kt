@@ -47,6 +47,8 @@ class SaylPlugin : Plugin() {
             } catch (e: Exception) {
                 // رابط تيك توك مختصر لمنشور صور: يُعرف بعد فتحه
                 if (Sites.of(url) == "tiktok") runCatching { TikTokPhotos.read(url) }.getOrNull()?.let { return@bg call.resolve(JSObject().put("json", TikTokPhotos.toJson(it))) }
+                // فيديو تيك توك لم يقرأه yt-dlp: السيرفر 3 يقرأ الصفحة نفسها
+                if (TikTokVideo.supports(url)) runCatching { TikTokVideo.read(url) }.getOrNull()?.let { return@bg call.resolve(JSObject().put("json", TikTokVideo.toJson(it.video))) }
                 // السيرفر 1 لم يقرأ الرابط: نجرّب السيرفر 2 إن كان يدعمه وكان الخطأ غير دائم
                 if (Server2.supports(url) && Failure.classify(e.message) != Failure.Kind.PERMANENT) runCatching { Server2.info(url) }.getOrElse { throw e } else throw e
             }
@@ -67,7 +69,7 @@ class SaylPlugin : Plugin() {
                 args = args, thumb = o.optString("thumb").ifEmpty { null }, site = o.optString("site", "other"),
                 folder = o.optString("folder").ifEmpty { null },
                 group = o.optString("group").ifEmpty { null }, author = o.optString("author").ifEmpty { null },
-                engine = if (o.optString("kind") == "image" || o.optString("kind") == "music") 3 else 1,
+                engine = if (o.optString("kind") == "image" || o.optString("kind") == "music") 3 else Bus.engineOf(o.optInt("server", 0)) ?: 1,
                 choice = o.optJSONObject("choice")?.toString(),
                 scheduledAt = o.optLong("scheduledAt", 0), wifiOnly = o.optBoolean("wifiOnly", false),
             )
@@ -116,7 +118,9 @@ class SaylPlugin : Plugin() {
     @PluginMethod
     fun retry(call: PluginCall) {
         val id = call.getString("id") ?: return call.reject("id مطلوب")
-        val j = store.update(id) { if (!it.active) it.copy(state = "queued", attempts = 0, error = null, retryAt = 0, pct = 0f, downloaded = 0, scheduledAt = Schedule.FORCE) else it }
+        // «جرّب سيرفراً آخر»: server = 1 أو 2 أو 3؛ دونه يبقى السيرفر نفسه
+        val engine = Bus.engineOf(call.getInt("server") ?: 0)
+        val j = store.update(id) { if (!it.active) it.copy(state = "queued", attempts = 0, error = null, retryAt = 0, pct = 0f, downloaded = 0, total = 0, scheduledAt = Schedule.FORCE, engine = engine ?: it.engine) else it }
         j?.let { Bus.emit("state", it) }
         DownloadWorker.kick(context)
         call.resolve()
@@ -222,6 +226,7 @@ class SaylPlugin : Plugin() {
     @PluginMethod
     fun setConfig(call: PluginCall) {
         call.getInt("parallel")?.let { Bus.setParallel(context, it) }
+        call.getBoolean("autoServer")?.let { Bus.setAutoServer(context, it) }
         val w = call.getObject("window")?.let {
             fun min(s: String?) = s?.split(":")?.let { p -> p[0].toInt() * 60 + p[1].toInt() } ?: 0
             Schedule.Window(it.optBoolean("on"), min(it.optString("from", "01:00")), min(it.optString("to", "07:00")))

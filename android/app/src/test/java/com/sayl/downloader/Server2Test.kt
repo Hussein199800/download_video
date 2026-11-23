@@ -52,7 +52,14 @@ class Server2Test {
         assertEquals(ServerPolicy.Step.SERVER2, ServerPolicy.next(Failure.Kind.EXTRACT, yt, 9 * h, 10 * h, false, false))
         assertEquals(ServerPolicy.Step.SERVER2, ServerPolicy.next(Failure.Kind.TEMPORARY, yt, 0, 10 * h, true, false))
         // لا يدعمه سيرفر 2، أو جُرّب: إعادة مؤجلة
-        assertEquals(ServerPolicy.Step.DEFER, ServerPolicy.next(Failure.Kind.EXTRACT, tt, 9 * h, 10 * h, false, false))
+        // تيك توك: السيرفر 3 أولاً حتى مع خطأ دائم، ثم لا شيء بعده
+        assertEquals(ServerPolicy.Step.SERVER3, ServerPolicy.next(Failure.Kind.EXTRACT, tt, 9 * h, 10 * h, false, false))
+        assertEquals(ServerPolicy.Step.SERVER3, ServerPolicy.next(Failure.Kind.PERMANENT, tt, 9 * h, 10 * h, false, false))
+        assertEquals(ServerPolicy.Step.DEFER, ServerPolicy.next(Failure.Kind.EXTRACT, tt, 9 * h, 10 * h, false, false, triedServer3 = true))
+        assertEquals(ServerPolicy.Step.DEFER, ServerPolicy.next(Failure.Kind.NETWORK, tt, 9 * h, 10 * h, false, false))
+        // التبديل التلقائي مطفأ: لا انتقال لسيرفر آخر
+        assertEquals(ServerPolicy.Step.DEFER, ServerPolicy.next(Failure.Kind.EXTRACT, tt, 9 * h, 10 * h, false, false, auto = false))
+        assertEquals(ServerPolicy.Step.DEFER, ServerPolicy.next(Failure.Kind.EXTRACT, yt, 9 * h, 10 * h, true, false, auto = false))
         assertEquals(ServerPolicy.Step.DEFER, ServerPolicy.next(Failure.Kind.EXTRACT, yt, 9 * h, 10 * h, true, true))
         // الشبكة والدائم لا يبدّلان
         assertEquals(ServerPolicy.Step.FAIL, ServerPolicy.next(Failure.Kind.PERMANENT, yt, 0, 10 * h, false, false))
