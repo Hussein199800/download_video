@@ -22,15 +22,21 @@ object StreamPicker {
 
 /** متى نبدّل من السيرفر 1 إلى السيرفر 2. */
 object ServerPolicy {
-    enum class Step { UPDATE_AND_RETRY, SERVER2, DEFER, FAIL }
+    enum class Step { UPDATE_AND_RETRY, SERVER2, SERVER3, DEFER, FAIL }
 
     private const val UPDATE_EVERY = 6 * 3_600_000L
 
-    fun next(kind: Failure.Kind, url: String, lastUpdateAt: Long, now: Long, triedUpdate: Boolean, triedServer2: Boolean): Step = when {
-        kind == Failure.Kind.PERMANENT -> Step.FAIL
+    /**
+     * auto = false: المستخدم أوقف التبديل التلقائي، فلا ينتقل لسيرفر آخر (يختاره هو من بطاقة الفشل).
+     * تيك توك: السيرفر 3 أولاً لأنه سريع ويقرأ الصفحة نفسها، حتى مع «محظور في منطقتك» من yt-dlp.
+     */
+    fun next(kind: Failure.Kind, url: String, lastUpdateAt: Long, now: Long, triedUpdate: Boolean, triedServer2: Boolean,
+             triedServer3: Boolean = false, auto: Boolean = true): Step = when {
         kind == Failure.Kind.NETWORK -> Step.DEFER
+        auto && !triedServer3 && TikTokVideo.supports(url) -> Step.SERVER3
+        kind == Failure.Kind.PERMANENT -> Step.FAIL
         !triedUpdate && now - lastUpdateAt > UPDATE_EVERY -> Step.UPDATE_AND_RETRY
-        !triedServer2 && Server2.supports(url) -> Step.SERVER2
+        auto && !triedServer2 && Server2.supports(url) -> Step.SERVER2
         else -> Step.DEFER
     }
 }

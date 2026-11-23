@@ -54,3 +54,21 @@ test('مجلد المنصة من رابط المنشور المختصر', async 
   assert.equal(siteOf('https://vm.tiktok.com/ZMabc/').folder, 'تيك توك');
   assert.equal(siteOf('https://vimeo.com/1').folder, 'مواقع أخرى');
 });
+
+test('السيرفرات المتاحة لكل رابط مطابقة لـ Kotlin', async () => {
+  const { serversFor, serverOf } = await import('../../src/servers.js');
+  assert.deepEqual(serversFor('https://www.youtube.com/watch?v=x'), [1, 2]);
+  assert.deepEqual(serversFor('https://www.youtube.com/playlist?list=PL1'), [1]);
+  assert.deepEqual(serversFor('https://www.tiktok.com/@a/video/1'), [1, 3]);
+  assert.deepEqual(serversFor('https://vm.tiktok.com/ZMabc/'), [1, 3]);
+  assert.deepEqual(serversFor('https://www.tiktok.com/@a/photo/1'), [1]);
+  assert.deepEqual(serversFor('https://x.com/a/status/1'), [1]);
+  assert.deepEqual(serversFor('ليس رابطاً'), [1]);
+  assert.deepEqual([1, 2, 3, 4, undefined].map(serverOf), [1, 2, null, 3, 1]);
+  // مضيفات السيرفر 2 هي نفسها في Server2.kt
+  const { readFileSync } = await import('node:fs');
+  const kt = readFileSync(new URL('../../android/app/src/main/java/com/sayl/downloader/Server2.kt', import.meta.url), 'utf8');
+  const js = readFileSync(new URL('../../src/servers.js', import.meta.url), 'utf8');
+  const hosts = (s) => s.match(/\(youtube\\\\?\.com[^)]*\)/)[0].replace(/\\\\/g, '\\');
+  assert.equal(hosts(kt), hosts(js));
+});

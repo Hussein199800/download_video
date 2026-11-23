@@ -13,7 +13,7 @@ test('القيم الافتراضية عند التخزين الفارغ أو ا
   assert.deepEqual(getSettings(), DEFAULTS);
   assert.deepEqual(DEFAULTS, { theme: 'auto', fontScale: 1, video: 'best', audio: 'mp3', kbps: 192, parallel: 1, aria2: false, clipboard: true,
     connections: 4, retries: 5, window: { on: false, from: '01:00', to: '07:00' }, shareAsk: true,
-    quick: [{ type: 'video', height: 'best' }, { type: 'video', height: 720, wa: true }, { type: 'audio', format: 'mp3', kbps: 192 }] });
+    quick: [{ type: 'video', height: 'best' }, { type: 'video', height: 720, wa: true }, { type: 'audio', format: 'mp3', kbps: 192 }], autoServer: true });
 });
 
 test('الحفظ مع حصر القيم في حدودها', () => {

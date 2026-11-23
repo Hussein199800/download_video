@@ -1,7 +1,8 @@
 // خيارات إضافية قبل التنزيل: جزء من المقطع فقط، ونسخة مضغوطة للواتساب، والترجمة.
 // القص والضغط خطوتان تلقائيتان بعد اكتمال التنزيل (choice.after) تنفّذهما أدوات المعالجة،
 // والناتج يُحفظ بجانب الملف في مجلد منصته.
-import { h, seg } from '../ui.js';
+import { h, seg, chips } from '../ui.js';
+import { SERVERS, serversFor } from '../servers.js';
 import { iso, parseTime, timeField } from '../text.js';
 
 const sw = (id, title, hint, onChange) => {
@@ -11,7 +12,18 @@ const sw = (id, title, hint, onChange) => {
 
 export function extrasPicker(info, kind = 'video') {
   const dur = Number(info.duration) || 0;
-  const st = { clip: false, precise: false, keep: false, wa: false, sub: '', embed: false, kind };
+  const st = { clip: false, precise: false, keep: false, wa: false, sub: '', embed: false, kind, server: info.server || 0 };
+
+  // ---------- السيرفر: تلقائي افتراضياً، أو يختاره المستخدم ----------
+  const servers = serversFor(info.url || '');
+  const serverHint = h('p', { class: 'hint', id: 'server-hint' });
+  const hintFor = (v) => (v ? SERVERS[v].desc : 'يبدأ بالسيرفر 1، وإن فشل جرّب الآخر وحده (ما لم توقف ذلك من الإعدادات).');
+  serverHint.textContent = hintFor(st.server);
+  const serverBox = servers.length > 1 && h('div', { class: 'set-col', id: 'server-box' },
+    h('b', {}, 'السيرفر'),
+    chips([{ value: 0, label: 'تلقائي' }, ...servers.map((n) => ({ value: n, label: SERVERS[n].name }))], st.server,
+      (v) => { st.server = v; serverHint.textContent = hintFor(v); }, 'c-indigo'),
+    serverHint);
 
   // ---------- جزء من المقطع ----------
   const startIn = h('input', { class: 'field time-field', id: 'clip-start', inputmode: 'decimal', dir: 'ltr', value: timeField(0), 'aria-label': 'البداية' });
@@ -58,8 +70,8 @@ export function extrasPicker(info, kind = 'video') {
 
   const videoOnly = [wa.row, subBox].filter(Boolean);
   const el = h('details', { class: 'card extras', id: 'extras' },
-    h('summary', {}, 'خيارات إضافية', h('small', {}, 'جزء من المقطع، نسخة للواتساب، الترجمة')),
-    clip.row, clipBox, ...videoOnly);
+    h('summary', {}, 'خيارات إضافية', h('small', {}, servers.length > 1 ? 'السيرفر، جزء من المقطع، نسخة للواتساب، الترجمة' : 'جزء من المقطع، نسخة للواتساب، الترجمة')),
+    ...[serverBox, clip.row, clipBox, ...videoOnly].filter(Boolean));
 
   const setKind = (k) => {
     st.kind = k;
@@ -81,7 +93,7 @@ export function extrasPicker(info, kind = 'video') {
       const video = st.kind === 'video';
       if (video && st.wa) after.push({ op: 'compress', params: { level: 'strong', codec: 'h264' } });
       const s = video && st.sub ? subs.find((x) => x.lang === st.sub) : null;
-      return { after: after.length ? after : undefined, subs: s ? { lang: s.lang, auto: s.auto, embed: st.embed } : undefined };
+      return { after: after.length ? after : undefined, subs: s ? { lang: s.lang, auto: s.auto, embed: st.embed } : undefined, server: st.server || undefined };
     },
   };
 }

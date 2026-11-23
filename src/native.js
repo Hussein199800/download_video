@@ -16,6 +16,8 @@ const fire = (ev, data) => listeners[ev].forEach((cb) => cb(data));
 // محاكاة مشاركة رابط من تطبيق آخر في الاختبارات
 if (typeof window !== 'undefined') window.__share = (text) => fire('shared', { text });
 let mockCookies = false;
+// التبديل التلقائي بين السيرفرات (من الإعدادات)
+let mockAuto = true;
 let mockChannel = 'stable';
 
 function mockInfo(url) {
@@ -32,6 +34,10 @@ function mockInfo(url) {
     return Promise.resolve({ json: JSON.stringify({ _type: 'album', id: ph[2], title: 'رحلة الشتاء\nصور من الجبل #سفر', uploader: ph[1], site: 'tiktok',
       webpage_url: `https://www.tiktok.com/@${ph[1]}/photo/${ph[2]}`, audio: 'https://example.invalid/music.mp3',
       entries: Array.from({ length: n }, (_, i) => ({ index: i + 1, urls: [`https://example.invalid/img/${i + 1}.jpg`], width: 1080, height: 1440 })) }) });
+  }
+  // فيديو تيك توك لم يقرأه yt-dlp («s3» في الرابط): قرأه السيرفر 3
+  if (/tiktok\.com\/@[\w.]+\/video\/\d+.*s3/.test(url)) {
+    return Promise.resolve({ json: JSON.stringify({ id: '7', title: 'رقصة تيك توك', uploader: 'dancer', duration: 27, thumbnail: '', webpage_url: url, server: 3, formats: [{ height: 1024, vcodec: 'h264' }] }) });
   }
   if (/login/.test(url)) return Promise.reject(new Error('ERROR: Sign in to confirm you’re not a bot'));
   if (/list=/.test(url)) {
@@ -75,6 +81,14 @@ function mockRun(j) {
     cur.pct = Math.min(100, cur.pct + (cur.slow ? 2 : 25));
     cur.total = 52428800; cur.downloaded = Math.round(cur.total * cur.pct / 100);
     cur.speed = 1572864; cur.eta = Math.round((100 - cur.pct) / 25);
+    // «ttbad» في رابط تيك توك: السيرفر 1 يفشل، والسيرفر 3 ينجح (تلقائياً أو باختيار المستخدم)
+    if (/ttbad/.test(cur.url) && (cur.engine || 1) === 1) {
+      if (mockAuto) { cur.engine = 4; fire('state', { ...cur }); } else {
+        clearInterval(t);
+        Object.assign(cur, { state: 'failed', attempts: 1, error: 'ERROR: [TikTok] 1: Unable to extract webpage video data', finishedAt: Date.now() });
+        return fire('state', { ...cur });
+      }
+    }
     // window.__failImages: أرقام صور تفشل في أول محاولة (لاختبار إعادة المتعثرة فقط)
     const failIdx = window.__failImages || [];
     if (cur.kind === 'image' && failIdx.includes(cur.choice?.index) && !cur.attempts) {
@@ -109,7 +123,7 @@ const mock = {
     for (const j of jobs) {
       const dup = [...mockJobs.values()].some((x) => (x.state === 'queued' || x.state === 'running') && x.url === j.url && JSON.stringify(x.args) === JSON.stringify(j.args));
       if (dup) continue;
-      const job = { ...j, slow: /slow/.test(j.url), hold: /hold/.test(j.url), order: Date.now() + added, state: 'queued', pct: 0, speed: 0, eta: -1, error: null, path: null, uri: null, attempts: 0, createdAt: Date.now(), finishedAt: 0 };
+      const job = { ...j, engine: j.kind === 'image' || j.kind === 'music' ? 3 : ({ 2: 2, 3: 4 }[j.server] || 1), slow: /slow/.test(j.url), hold: /hold/.test(j.url), order: Date.now() + added, state: 'queued', pct: 0, speed: 0, eta: -1, error: null, path: null, uri: null, attempts: 0, createdAt: Date.now(), finishedAt: 0 };
       mockJobs.set(j.id, job); added++;
       mockRun(job);
     }
@@ -122,7 +136,7 @@ const mock = {
   move: ({ id, delta }) => { mockReorder(id, (ids, i) => Math.max(0, Math.min(ids.length - 1, i + delta))); return Promise.resolve(); },
   toTop: ({ id }) => { mockReorder(id, () => 0); return Promise.resolve(); },
   startNow: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { scheduledAt: -1, wifiOnly: false, state: 'queued' }); fire('state', { ...j }); } return Promise.resolve(); },
-  retry: ({ id }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }); fire('state', { ...j }); mockRun(j); } return Promise.resolve(); },
+  retry: ({ id, server }) => { const j = mockJobs.get(id); if (j) { Object.assign(j, { state: 'queued', pct: 0, error: null }, server ? { engine: { 1: 1, 2: 2, 3: 4 }[server] } : {}); fire('state', { ...j }); mockRun(j); } return Promise.resolve(); },
   openUrl: ({ url }) => { window.__opened = url; return Promise.resolve(); },
   // الملفات التي «حُذفت يدوياً» في الاختبار: window.__gone
   exists: ({ uris }) => Promise.resolve({ exists: uris.map((u) => {
@@ -137,7 +151,7 @@ const mock = {
   components: () => Promise.resolve({ ytdlp: '2026.10.10', channel: mockChannel, ytdlpUpdatedAt: 0, server2: 'NewPipe Extractor 0.26.5', ffmpeg: true, aria2c: true }),
   setChannel: ({ channel }) => { mockChannel = channel; return Promise.resolve(); },
   engineUpdate: () => Promise.resolve({ status: 'ALREADY_UP_TO_DATE', version: '2026.10.10' }),
-  setConfig: () => Promise.resolve(),
+  setConfig: (cfg) => { if (typeof cfg?.autoServer === 'boolean') mockAuto = cfg.autoServer; return Promise.resolve(); },
   abi: () => Promise.resolve({ abi: 'arm64-v8a' }),
   hasCookies: () => Promise.resolve({ value: mockCookies }),
   importCookies: () => { mockCookies = true; return Promise.resolve(); },
@@ -162,7 +176,7 @@ export const Sayl = {
   move: (id, delta) => P.move({ id, delta }),
   toTop: (id) => P.toTop({ id }),
   startNow: (id) => P.startNow({ id }),
-  retry: (id) => P.retry({ id }),
+  retry: (id, server) => P.retry({ id, server }),
   remove: (id, deleteFile = false) => P.remove({ id, deleteFile }),
   exists: async (uris) => (await P.exists({ uris })).exists,
   openUrl: (url) => P.openUrl({ url }),

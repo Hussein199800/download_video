@@ -99,6 +99,6 @@ export function parseInfo(j) {
     .map((f) => f.height))].sort((x, y) => y - x);
   return {
     kind: 'single', id: j.id, title: j.title || 'بدون عنوان', uploader: j.uploader || j.channel || '',
-    duration: j.duration || null, thumbnail: j.thumbnail || null, url: j.webpage_url || j.original_url || j.url, heights, subs: subtitleList(j),
+    duration: j.duration || null, thumbnail: j.thumbnail || null, url: j.webpage_url || j.original_url || j.url, heights, subs: subtitleList(j), server: j.server || null,
   };
 }

@@ -1,3 +1,3 @@
 // غيّر الرقمين هنا وفي package.json وandroid/app/build.gradle معاً (اختبار آلي يتحقق من تطابقها)
-export const VERSION = '1.3.0';
-export const VERSION_CODE = 4;
+export const VERSION = '1.4.0';
+export const VERSION_CODE = 5;

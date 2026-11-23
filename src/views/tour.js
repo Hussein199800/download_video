@@ -4,6 +4,7 @@ import { h, ic, sheet } from '../ui.js';
 import { getMeta, setMeta } from '../store.js';
 import { VERSION } from '../version.js';
 import { CHANGELOG } from '../changelog.js';
+import { isNewer } from '../update.js';
 
 // خطوة لكل تبويب بلونه وأيقونته
 export const TOUR = [
@@ -16,6 +17,9 @@ export const TOUR = [
   { color: 'c-sky', icon: 'download', t: 'التنزيلات', p: [
     'تستمر في الخلفية ولو أغلقت التطبيق، مع ما حُمّل وما بقي والسرعة والوقت المتبقي.',
     'أوقف واستكمل ورتّب الطابور، وجدول التنزيل لوقت محدد أو للواي فاي فقط.'] },
+  { color: 'c-amber', icon: 'image', t: 'الصور', p: [
+    'الصق رابط منشور صور من تيك توك (أو شاركه إلى سَيْل) فتظهر صوره كلها: نزّلها دفعة واحدة أو اختر منها.',
+    'تُحفظ في مجلد باسم المنشور، وتجدها ألبوماً واحداً في المكتبة.'] },
   { color: 'c-green', icon: 'grid', t: 'المكتبة', p: [
     'كل ما نزّلته أو عالجته في شبكة أو قائمة، مع البحث والفرز والملفات المكررة والكبيرة.',
     'اضغط مطولاً على ملف لتحديد عدة ملفات ثم شاركها أو احذفها أو عالجها معاً.'] },
@@ -23,7 +27,7 @@ export const TOUR = [
     'حوّل الصيغة واضغط الفيديو بالدقة نفسها، وقص والتقط صورة، وادمج المقاطع واستخرج الصوت.',
     'كل شيء على هاتفك دون رفع أي ملف، والأصل يبقى كما هو.'] },
   { color: 'c-violet', icon: 'info', t: 'ⓘ بجانب كل رقم', p: [
-    'اضغطها لتعرف من أين جاء الرقم وكيف حُسب. والشرح الكامل في تبويب «الشرح».',
+    'اضغطها لتعرف من أين جاء الرقم وكيف حُسب. والشرح الكامل في «المزيد ← المساعدة».',
     'جاهز؟ لنبدأ.'] },
 ];
 
@@ -83,5 +87,7 @@ export function intro({ existing }) {
   const m = getMeta();
   if (!m.tourSeen && !existing) return openTour();
   if (!m.tourSeen) setMeta({ tourSeen: true });
-  if (m.seenVersion !== VERSION) openWhatsNew();
+  // بعد تحديث فقط: لا عند الرجوع إلى إصدار أقدم (تثبيت نسخة سابقة)
+  if (!m.seenVersion || isNewer(VERSION, m.seenVersion)) openWhatsNew();
+  else if (m.seenVersion !== VERSION) setMeta({ seenVersion: VERSION });
 }

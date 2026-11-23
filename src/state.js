@@ -43,7 +43,8 @@ export function logError(where, message) {
   let list = [];
   try { list = JSON.parse(localStorage.getItem(LOG) || '[]'); } catch {}
   list.unshift({ at: Date.now(), where, message: String(message).slice(0, 2000) });
-  localStorage.setItem(LOG, JSON.stringify(list.slice(0, 50)));
+  // امتلاء التخزين لا يكسر ما سجّل الخطأ
+  try { localStorage.setItem(LOG, JSON.stringify(list.slice(0, 50))); } catch {}
 }
 export const readLog = () => { try { return JSON.parse(localStorage.getItem(LOG) || '[]'); } catch { return []; } };
 export const clearLog = () => localStorage.removeItem(LOG);

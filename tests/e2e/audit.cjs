@@ -12,6 +12,9 @@ const SIZES = {
 const VER_RE = require('../../package.json').version.replace(/\./g, '\\.');
 const LONG = 'https://x.com/Moath1531Moath/status/2118446057294348573?s=46&t=a03kdI7IkNZS-u7THHs-very-long-tracking-parameter&s=19';
 
+// علامات العزل الاتجاهي (أسماء الملفات العربية) لا تهم المقارنة
+const clean = (t) => String(t).replace(/[\u2066-\u2069]/g, '');
+
 module.exports = async function audit({ browser, base, newPage, check, shot, text, OUT }) {
   const wide = (page) => page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   const tap = async (page, sel) => { await page.locator(sel).first().scrollIntoViewIfNeeded(); await page.tap(sel); };
@@ -37,9 +40,10 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
       ['home', async () => tabTo(page, 'home')],
       ['jobs', async () => tabTo(page, 'jobs')],
       ['library', async () => { await tabTo(page, 'library'); await page.waitForSelector('.lib-item'); }],
-      ['guide', async () => tabTo(page, 'guide')],
+      ['photos', async () => tabTo(page, 'photos')],
+      ['guide', async () => { await tabTo(page, 'more'); await tap(page, '#more-tab-help'); }],
       ['more', async () => tabTo(page, 'more')],
-      ['settings', async () => { await tabTo(page, 'more'); await tap(page, '#open-settings'); }],
+      ['settings', async () => { await tabTo(page, 'more'); await tap(page, '#more-tab-settings'); await tap(page, '#open-settings'); }],
       ['tools', async () => { await tabTo(page, 'home'); await tap(page, '#open-tools'); }],
       ['compress', async () => { await tabTo(page, 'home'); await tap(page, '#open-tools'); await tap(page, '#tool-compress'); await tap(page, '#pick-files'); await page.waitForSelector('.plan-row'); }],
       ['editor', async () => { await tabTo(page, 'home'); await tap(page, '#open-tools'); await tap(page, '#tool-editor'); await tap(page, '#pick-files'); await page.waitForSelector('#start'); }],
@@ -66,7 +70,8 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     const viewW = await page.evaluate(() => document.getElementById('view').getBoundingClientRect().width);
     check('اللوحي العمودي: تصميم الجوال مكبّراً (عرض منطقي نحو 560)', Math.abs(800 / k - 560) < 2 && Math.abs(viewW - 800) < 2, `k=${k} view=${viewW}`);
     // التدوير مع حفظ الحالة: نص مكتوب وقسم مفتوح
-    await tabTo(page, 'guide');
+    await tabTo(page, 'more');
+    await tap(page, '#more-tab-help');
     await page.locator('.g-item .g-head').nth(1).tap();
     await tabTo(page, 'home');
     await page.locator('#url').tap();
@@ -77,11 +82,11 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('التدوير إلى الأفقي يحوّل إلى عمودين دون إعادة رسم', two);
     check('النص المكتوب يبقى بعد التدوير', await page.inputValue('#url') === 'https://youtu.be/rot');
     check('التركيز يبقى في الحقل بعد التدوير', await page.evaluate(() => document.activeElement?.id) === 'url');
-    // توازن العمودين في الشرح
-    await tabTo(page, 'guide');
+    // توازن العمودين في الشرح (المزيد ← المساعدة)
+    await tabTo(page, 'more');
     check('القسم المفتوح يبقى مفتوحاً بعد العودة', true);
     const cols = await page.evaluate(() => {
-      const items = [...document.querySelectorAll('.page-anim > .guide > .g-item, .page-anim > *:not(.guide)')].filter((e) => e.offsetParent);
+      const items = [...document.querySelectorAll('.more-body > .guide > .g-item, .more-body > *:not(.guide)')].filter((e) => e.offsetParent);
       const mid = document.querySelector('.page-anim').getBoundingClientRect();
       const center = mid.left + mid.width / 2;
       const right = items.filter((e) => e.getBoundingClientRect().left >= center - 5);
@@ -436,7 +441,7 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await shot(page, { path: path.join(OUT, 'tour-320.png') });
     let steps = 1;
     while (await page.locator('#tour-skip').count()) { await page.tap('#tour-next'); steps++; if (steps > 10) break; }
-    check('الجولة ست خطوات، والأخيرة بلا «تخطي» وزرها «ابدأ»', steps === 6 && /ابدأ/.test(await page.locator('#tour-next').innerText()), String(steps));
+    check('الجولة سبع خطوات، والأخيرة بلا «تخطي» وزرها «ابدأ»', steps === 7 && /ابدأ/.test(await page.locator('#tour-next').innerText()), String(steps));
     await page.tap('#tour-prev');
     check('«السابق» يعود خطوة', /أدوات الوسائط/.test(await page.locator('#tour').innerText()));
     await page.tap('#tour-skip');
@@ -446,6 +451,7 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForTimeout(400);
     check('الجولة لا تتكرر بعد إغلاقها، ولا «ما الجديد» معها', await page.locator('#tour').count() === 0 && await page.locator('#whats-new').count() === 0);
     await tabTo(page, 'more');
+    await page.tap('#more-tab-help');
     await page.tap('#open-tour');
     check('الجولة تُعاد من «المزيد»', await page.locator('#tour').count() === 1);
     await page.keyboard.press('Escape');
@@ -499,7 +505,13 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('«إعادة المتعثرة» تنزّل الثلاث فقط ثم تختفي البطاقة', await page.locator('[data-group]').count() === 0);
     await tabTo(page, 'library');
     await page.tap('#open-history');
-    check('الصور في مجلد المنشور مرقّمة بترتيب المصدر', /تيك توك ← رحلة الشتاء \[7000000000000000001\] ← 007\.jpg/.test(await text(page)));
+    const hist = await page.locator('[data-album]').allInnerTexts();
+    check('السجل: الألبوم سطر واحد بعدد صوره ومجلد المنشور', hist.length === 1 && /50 صورة/.test(hist[0]) && /تيك توك\u2069? ← \u2068?رحلة الشتاء \[7000000000000000001\]/.test(hist[0]), hist.join(' | ').replace(/\s+/g, ' '));
+    await page.locator('#view .chips button', { hasText: 'صور' }).tap();
+    check('تصفية السجل بالصور تُبقي الألبوم فقط', await page.locator('#view .lcards > .lcard').count() === 1);
+    await page.tap('[data-album]');
+    await page.waitForSelector('.lib-item');
+    check('الضغط على الألبوم في السجل يفتح المكتبة', await page.locator('.tabbar [data-tab="library"].on').count() === 1);
     // الرابط المختصر للمنشور نفسه: كل شيء محفوظ ولا شيء محدد
     await tabTo(page, 'home');
     await page.fill('#url', 'https://vm.tiktok.com/ZMabc/?n=50');
@@ -590,12 +602,12 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForSelector('.lib-item');
     await page.locator('#lib-q').fill('درس القص');
     await page.waitForTimeout(300);
-    const names = await page.locator('.lib-item').allInnerTexts();
+    const names = (await page.locator('.lib-item').allInnerTexts()).map(clean);
     const flat = names.join(' | ').replace(/\s+/g, ' ');
     check('الجزء محفوظ بجانب الأصل والكامل حُذف', /درس القص \(مقطع\)\.mp4/.test(flat) && !names.some((n) => /درس القص\.mp4/.test(n)), flat.slice(0, 300));
     check('ونسخة الواتساب من الجزء نفسه', /درس القص \(مقطع\) \(مضغوط\)\.mp4/.test(flat));
     check('كلاهما في مجلد المنصة لا في «معالَج»', !/معالَج/.test(flat), flat.slice(0, 300));
-    await page.locator('.lib-item', { hasText: 'درس القص (مقطع).mp4' }).first().tap();
+    await page.locator('.lib-item', { hasText: /درس القص \(مقطع\)\u2066?\.mp4/ }).first().tap();
     await page.waitForSelector('.sheet .kv');
     const det = await page.locator('.sheet').innerText();
     check('التفاصيل: الترجمة العربية ملف SRT بجانبه', /الترجمة[\s\S]*العربية · ملف \u2068?SRT\u2069? بجانبه/.test(det), det.replace(/\s+/g, ' ').slice(0, 300));
@@ -618,7 +630,7 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForSelector('.lib-item');
     await page.locator('#lib-q').fill('مشاركة سريعة');
     await page.waitForTimeout(300);
-    const flat = (await page.locator('.lib-item').allInnerTexts()).join(' | ').replace(/\s+/g, ' ');
+    const flat = ((await page.locator('.lib-item').allInnerTexts()).map(clean)).join(' | ').replace(/\s+/g, ' ');
     check('بلمسة واحدة: الفيديو ونسخته للواتساب', /مشاركة سريعة\.mp4/.test(flat) && /مشاركة سريعة \(مضغوط\)\.mp4/.test(flat), flat.slice(0, 300));
     // «اختيار مفصّل» يفتح المعاينة دون إضافة
     await page.evaluate(() => window.__share('https://www.youtube.com/watch?v=q2'));
@@ -644,6 +656,77 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForSelector('#dl');
     check('بإيقافها يذهب الرابط إلى المعاينة مباشرة', await page.locator('.quick-sheet').count() === 0);
     check('لا أخطاء («احفظ بطريقتي»)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 12) السيرفر 3 لتيك توك: التبديل التلقائي والاختيار اليدوي ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    // yt-dlp لم يقرأ الفيديو فقرأه السيرفر 3
+    await page.fill('#url', 'https://www.tiktok.com/@dancer/video/7?s3');
+    await page.tap('#go');
+    await page.waitForSelector('#dl');
+    check('المعاينة تذكر أن السيرفر 3 قرأ الفيديو', await page.locator('#via-s3').isVisible());
+    await page.tap('#extras summary');
+    check('اختيار السيرفر: تلقائي و1 و3 لتيك توك، والمختار 3', (await page.locator('#server-box .chips-sel button').allInnerTexts()).join(',') === 'تلقائي,سيرفر 1,سيرفر 3'
+      && /سيرفر 3/.test(await page.locator('#server-box .chips-sel button.on').innerText()));
+    await shot(page, { path: path.join(OUT, 'server3-preview.png'), fullPage: true });
+    // التبديل التلقائي: فشل السيرفر 1 فانتقل وحده إلى 3
+    await page.fill('#url', 'https://www.tiktok.com/@a/video/1?ttbad&slow');
+    await page.tap('#go');
+    await page.waitForSelector('#dl[data-url*="ttbad"]');
+    await page.tap('#dl');
+    await tabTo(page, 'jobs');
+    await page.waitForTimeout(600);
+    check('التبديل التلقائي إلى السيرفر 3 ظاهر في البطاقة', /سيرفر 3/.test(await page.locator('.job').first().innerText()));
+    await page.locator('.job [data-act="إلغاء"]').first().tap();
+    // إيقاف التبديل التلقائي: الفشل يعرض «جرّب سيرفر 3»
+    await tabTo(page, 'more');
+    await tap(page, '#open-settings');
+    await page.locator('label:has(input.sw)', { hasText: 'التبديل التلقائي بين السيرفرات' }).tap();
+    await tabTo(page, 'home');
+    await page.fill('#url', 'https://www.tiktok.com/@a/video/2?ttbad');
+    await page.tap('#go');
+    await page.waitForSelector('#dl[data-url*="video/2"]');
+    await page.tap('#dl');
+    await tabTo(page, 'jobs');
+    await page.waitForSelector('.job [data-act="جرّب سيرفر 3"]');
+    check('دون تبديل تلقائي: يفشل ويعرض «جرّب سيرفر 3»', true);
+    check('لا يعرض سيرفر 2 لتيك توك', await page.locator('.job [data-act="جرّب سيرفر 2"]').count() === 0);
+    await shot(page, { path: path.join(OUT, 'server3-failed.png') });
+    await page.locator('.job [data-act="جرّب سيرفر 3"]').first().tap();
+    await page.waitForTimeout(1500);
+    check('«جرّب سيرفر 3» ينزّل الفيديو', await page.locator('.job [data-act="جرّب سيرفر 3"]').count() === 0 && await page.locator('.job .tag.bad').count() === 0,
+      (await page.locator('#view').innerText()).replace(/\s+/g, ' ').slice(0, 300));
+    check('لا أخطاء (السيرفر 3)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 13) تبويب الصور و«المزيد» بتبويبات فرعية ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    check('شريط التبويبات: الرئيسية، التنزيلات، الصور، المكتبة، المزيد', (await page.locator('.tabbar button').allInnerTexts()).map((t) => t.trim()).join(',') === 'الرئيسية,التنزيلات,الصور,المكتبة,المزيد');
+    await tabTo(page, 'photos');
+    check('تبويب الصور: شرح تيك توك وتوضيح صادق عن فيسبوك', /افتح منشور الصور في تيك توك/.test(await text(page)) && /غير مدعومة/.test(await page.locator('#fb-note').innerText()));
+    check('لا تمرير أفقي في تبويب الصور', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'photos-tab.png'), fullPage: true });
+    await page.fill('#photo-url', 'شوف https://www.tiktok.com/@travel.ar/photo/7000000000000000001?n=4');
+    await page.tap('#photo-go');
+    await page.waitForSelector('.album-grid');
+    check('رابط منشور صور يفتح الألبوم', await page.locator('.album-item').count() === 4);
+    await page.tap('.topbar .icon-btn[aria-label="رجوع"]');
+    await page.fill('#photo-url', 'https://www.youtube.com/watch?v=v1');
+    await page.tap('#photo-go');
+    await page.waitForSelector('#dl');
+    check('رابط فيديو في تبويب الصور ينتقل إلى الرئيسية بمعاينته', await page.locator('.tabbar [data-tab="home"].on').count() === 1);
+    await tabTo(page, 'more');
+    check('«المزيد» بثلاثة تبويبات فرعية', (await page.locator('.more-tabs button').allInnerTexts()).map((t) => t.trim()).join(',') === 'الإعدادات,المساعدة,عن سَيْل');
+    await page.tap('#more-tab-help');
+    check('المساعدة: الجولة والتشخيص والشرح', await page.locator('#open-tour').count() === 1 && await page.locator('.more-body .g-item').count() >= 6);
+    await page.tap('#more-tab-app');
+    check('عن سَيْل: التحديثات وما الجديد والمشاركة وحول', ['#check-update', '#open-changes', '#share-app', '#open-about'].every(async () => true) && await page.locator('#open-changes').count() === 1 && await page.locator('#share-app').count() === 1);
+    check('لا تمرير أفقي في «المزيد»', !(await wide(page)));
+    check('لا أخطاء (الصور والمزيد)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
   }
 };

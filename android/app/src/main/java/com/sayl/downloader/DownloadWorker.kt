@@ -57,10 +57,13 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
         val work = workDir(applicationContext, job.id)
         // كل تحديث في هذه المحاولة مشروط بأنها ما زالت الأحدث (إيقاف ثم استكمال سريع يبدأ محاولة جديدة)
         val mine = { store.get(job.id)?.run == job.run }
+        // علامة «رُفضت الترجمة» تخص هذه المحاولة فقط
+        SUBS_FAILED.remove(job.id)
         try {
             val file = when (job.engine) {
                 2 -> server2(job, work)
                 3 -> photo(job, work)
+                4 -> server3(job, work)
                 else -> server1WithFallback(job, work)
             }
             // أُلغيت أو أُوقفت أو بدأت محاولة أحدث قبل الحفظ: لا ننشر شيئاً
@@ -112,6 +115,7 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
     /** السيرفر 1؛ وعند فشل قابل للإصلاح: تحديث yt-dlp ثم إعادته، ثم السيرفر 2 إن كان يدعم الرابط */
     private fun server1WithFallback(job: Job, work: File): File {
         var triedUpdate = false
+        val auto = Bus.autoServer(applicationContext)
         while (true) {
             try {
                 return server1(job, work)
@@ -126,7 +130,7 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
                     return server1WithFallback(job.copy(args = SubArgs.strip(job.args)), work)
                 }
                 val kind = Failure.classify(e.message)
-                when (ServerPolicy.next(kind, job.url, Bus.lastEngineUpdate(applicationContext), System.currentTimeMillis(), triedUpdate, false)) {
+                when (ServerPolicy.next(kind, job.url, Bus.lastEngineUpdate(applicationContext), System.currentTimeMillis(), triedUpdate, false, auto = auto)) {
                     ServerPolicy.Step.UPDATE_AND_RETRY -> {
                         triedUpdate = true
                         runCatching { Engine.update(applicationContext) }
@@ -135,6 +139,11 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
                         val j = store.updateRun(job.id, job.run) { it.copy(engine = 2, pct = 0f, downloaded = 0, total = 0) } ?: throw e
                         Bus.emit("state", j)
                         return server2(j, work)
+                    }
+                    ServerPolicy.Step.SERVER3 -> {
+                        val j = store.updateRun(job.id, job.run) { it.copy(engine = 4, pct = 0f, downloaded = 0, total = 0) } ?: throw e
+                        Bus.emit("state", j)
+                        return server3(j, work)
                     }
                     else -> throw e
                 }
@@ -163,7 +172,19 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
      * بمعرّف ثابت من معرّف التنزيل، فلو أُعيد التنزيل بعد توقف مفاجئ لا تتكرر.
      */
     private fun chain(job: Job, saved: Saver.Saved, size: Long) {
-        val steps = runCatching { org.json.JSONObject(job.choice ?: "{}").optJSONArray("after") }.getOrNull() ?: return
+        val choice = runCatching { org.json.JSONObject(job.choice ?: "{}") }.getOrDefault(org.json.JSONObject())
+        val steps = choice.optJSONArray("after") ?: org.json.JSONArray()
+        // السيرفر 3 ينزّل الفيديو فقط: الصوت المطلوب يُستخرج منه ثم يُحذف الفيديو
+        if ((store.get(job.id)?.engine ?: job.engine) == 4 && job.kind == "audio") {
+            val p = org.json.JSONObject().put("format", choice.optString("format", "mp3")).put("kbps", choice.optInt("kbps", 192)).put("deleteSource", true)
+            val all = org.json.JSONArray().put(org.json.JSONObject().put("op", "audio").put("params", p))
+            for (i in 0 until steps.length()) all.put(steps.get(i))
+            return chainSteps(job, saved, size, all)
+        }
+        chainSteps(job, saved, size, steps)
+    }
+
+    private fun chainSteps(job: Job, saved: Saver.Saved, size: Long, steps: org.json.JSONArray) {
         if (steps.length() == 0) return
         fun task(i: Int, input: MediaRef?): MediaTask? {
             val s = steps.optJSONObject(i) ?: return null
@@ -198,6 +219,22 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, param
             val fresh = if (job.kind == "music") listOfNotNull(a.audio) else a.items.firstOrNull { it.index == index }?.urls.orEmpty()
             if (fresh.isEmpty()) throw IllegalStateException("الصورة لم تعد في المنشور")
             TikTokPhotos.fetch(fresh, File(work, "img"), base, canceled, progress)
+        }
+    }
+
+    /** السيرفر 3 (فيديو تيك توك من صفحته): السرعة تُحسب هنا لأنه لا يطبع تقدماً كـ yt-dlp */
+    private fun server3(job: Job, work: File): File {
+        val canceled = { store.get(job.id).let { it == null || it.run != job.run || it.state == "canceled" || it.state == "paused" } }
+        val s = TikTokVideo.read(job.url)
+        var t0 = System.currentTimeMillis()
+        var b0 = -1L
+        var speed = 0L
+        return TikTokVideo.download(s, File(work, "s3"), canceled) { done, total ->
+            val now = System.currentTimeMillis()
+            if (b0 < 0) { b0 = done; t0 = now }
+            if (now - t0 >= 1000) { speed = (done - b0) * 1000 / (now - t0); b0 = done; t0 = now }
+            val eta = if (speed > 0 && total > 0) (total - done) / speed else -1
+            liveProgress(job) { it.copy(downloaded = done, total = total, pct = if (total > 0) done * 100f / total else it.pct, speed = speed, eta = eta) }
         }
     }
 

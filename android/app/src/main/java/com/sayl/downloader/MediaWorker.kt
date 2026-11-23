@@ -302,11 +302,14 @@ private class Ops(
 
     private fun trim(): File {
         val start = p.optDouble("start", 0.0).coerceAtLeast(0.0)
-        val end = p.optDouble("end", 0.0)
+        val asked = p.optDouble("end", 0.0)
         val precise = p.optBoolean("precise", false)
-        if (end <= start) throw IllegalStateException("نهاية المقطع يجب أن تكون بعد بدايته")
+        if (asked <= start) throw IllegalStateException("نهاية المقطع يجب أن تكون بعد بدايته")
         val inp = input()
         val pr = probe(inp)
+        // نهاية بعد آخر الملف (مدة غير معروفة عند الطلب، أو خطوة بعد التنزيل) تُقصر على مدته
+        val end = if (pr.duration > 0) minOf(asked, pr.duration) else asked
+        if (end <= start) throw IllegalStateException("بداية الجزء بعد نهاية المقطع (${"%.0f".format(pr.duration)} ثانية)")
         val ext = src.name.substringAfterLast('.', "mp4").lowercase().let { if (it in MediaArgs.VIDEO_TARGETS || it in MediaArgs.AUDIO_TARGETS) it else "mp4" }
         if (!precise || !pr.hasVideo) {
             val out = out("مقطع", ext)

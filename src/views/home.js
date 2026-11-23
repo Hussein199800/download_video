@@ -23,10 +23,13 @@ let pendingQuick = null;
 let preferType = 'video';
 
 // رابط من المشاركة أو الحافظة: «احفظ بطريقتي» (طرق جاهزة بلمسة) أو المعاينة المفصّلة
-export function handleSharedText(text, ctx) {
+// direct: إلى المعاينة دون نافذة الطرق (مثلاً رابط فيديو لُصق في تبويب الصور)
+export function handleSharedText(text, ctx, { direct = false } = {}) {
   const url = extractUrl(text);
   const s = getSettings();
-  if (!url || !s.shareAsk || !s.quick.length) { pendingShared = text; ctx.go('home'); return; }
+  // منشور صور أو قائمة تشغيل: الطرق الجاهزة (فيديو/صوت لملف واحد) لا تنطبق، فإلى صفحته مباشرة
+  const many = url && (/tiktok\.com\/.*\/photo\//.test(url) || /[?&]list=/.test(url));
+  if (!url || direct || many || !s.shareAsk || !s.quick.length) { pendingShared = text; ctx.go('home'); return; }
   document.querySelector('.modal .quick-sheet')?.closest('.modal')?.remove();
   const pick = (p) => () => { close(); pendingShared = url; pendingQuick = p; ctx.go('home'); };
   const close = sheet(h('div', { class: 'quick-sheet' },
@@ -74,7 +77,7 @@ async function saveQuick(info, url, p) {
   const choice = quickChoice(p);
   const s = getSettings();
   await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: choice.type, args: buildArgs(choice, { aria2: s.aria2, connections: s.connections }), choice,
-    thumb: info.thumbnail || '', site: siteOf(url).id, scheduledAt: 0, wifiOnly: false }]);
+    server: info.server || undefined, thumb: info.thumbnail || '', site: siteOf(url).id, scheduledAt: 0, wifiOnly: false }]);
 }
 
 // current: الرابط الموجود في الحقل الآن؛ المعاينة لا تنزّل إلا الرابط الذي قُرئت منه
@@ -91,7 +94,7 @@ function preview(info, url, current) {
     const choice = { ...picker.choice(), ...(x.subs && { subs: x.subs }), ...(x.after && { after: x.after }) };
     const s = getSettings();
     btn.disabled = true;
-    await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: buildArgs(choice, { aria2: s.aria2, connections: s.connections }), choice,
+    await enqueueJobs([{ id: uid(), url: info.url || url, title: info.title, kind: picker.kind(), args: buildArgs(choice, { aria2: s.aria2, connections: s.connections }), choice, server: x.server,
       thumb: info.thumbnail || '', site: site.id, ...when.get() }]);
     btn.disabled = false;
   };
@@ -100,6 +103,8 @@ function preview(info, url, current) {
       info.thumbnail ? h('img', { class: 'thumb', src: info.thumbnail, alt: '', referrerpolicy: 'no-referrer', onerror: (e) => e.target.replaceWith(ic('video', 'thumb ph')) }) : ic('video', 'thumb ph'),
       h('div', { class: 'pv-txt' }, h('b', { class: 'more', style: '--lines:3', dir: 'auto' }, info.title),
         h('small', {}, [site.name, info.uploader, fmtDur(info.duration)].filter(Boolean).join(' · ')))),
+    // السيرفر 1 لم يقرأ الرابط فقرأه السيرفر 3: يُنزَّل به مباشرة
+    info.server === 3 && h('p', { class: 'hint', id: 'via-s3' }, 'قرأ السيرفر 3 هذا الفيديو من صفحة تيك توك نفسها، وسيُنزَّل به.'),
     picker.el, extras.el, when.el, btn);
 }
 
@@ -164,7 +169,9 @@ export function homeView(ctx) {
     toast(hint);
   };
 
-  const recent = doneJobs().slice(0, 3);
+  // آخر التنزيلات: الألبوم بطاقة واحدة (لا صورة صورة)
+  const seen = new Set();
+  const recent = doneJobs().filter((j) => { const k = j.group || j.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 3);
   // page.append يكتب null نصاً، فنمرر العناصر الموجودة فقط
   page.append(...[
     h('div', { class: 'intro' }, h('h2', {}, 'ماذا تريد أن تنزّل؟'), h('p', {}, 'الصق رابطاً من يوتيوب أو فيسبوك أو تيك توك أو إنستغرام أو أي موقع، أو شارك الرابط من التطبيق نفسه إلى سَيْل.')),
@@ -181,10 +188,12 @@ export function homeView(ctx) {
       (() => { const c = lcard({ color: 'c-teal', icon: 'tools', title: 'أدوات الوسائط', sub: 'تحويل وضغط وقص ودمج واستخراج الصوت، على هاتفك', onClick: () => openTools(ctx) }); c.id = 'open-tools'; return c; })(),
       (() => { const c = lcard({ color: 'c-wa', icon: 'whatsapp', title: 'حالات واتساب', sub: 'احفظ صور وفيديوهات الحالات التي شاهدتها', onClick: () => openStatuses(ctx) }); c.id = 'open-statuses'; return c; })()),
     recent.length ? h('h3', { class: 'sec-h' }, 'آخر التنزيلات') : null,
-    recent.length ? h('div', { class: 'lcards' }, recent.map((j) => lcard({
-      color: j.kind === 'audio' ? 'c-violet' : 'c-sky', icon: j.kind === 'audio' ? 'audio' : 'video', title: j.title, sub: j.path ? pathText(j.path) : '', clamp: true,
+    recent.length ? h('div', { class: 'lcards' }, recent.map((j) => (j.group ? lcard({
+      color: 'c-amber', icon: 'image', title: j.title, sub: 'ألبوم صور · في المكتبة', clamp: true, onClick: () => ctx.go('library'), end: ic('chevL', 'l-go'),
+    }) : lcard({
+      color: j.kind === 'audio' || j.kind === 'music' ? 'c-violet' : 'c-sky', icon: j.kind === 'audio' || j.kind === 'music' ? 'audio' : 'video', title: j.title, sub: j.path ? pathText(j.path) : '', clamp: true,
       onClick: () => Sayl.open(j.id).catch((e) => toast(e.message, 'bad')), end: ic('play', 'l-go'),
-    }))) : null,
+    })))) : null,
   ].filter(Boolean));
 
   if (pendingShared) {

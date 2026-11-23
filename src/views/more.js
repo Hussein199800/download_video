@@ -10,6 +10,7 @@ import { fetchLatest, isNewer, shouldCheck, RELEASES_PAGE, STABLE_APK, plainNote
 import { VERSION } from '../version.js';
 import { CHANGELOG } from '../changelog.js';
 import { openTour } from './tour.js';
+import { guideList } from './guide.js';
 import { choicePicker } from './choice.js';
 import { quickLabel, quickHint, sameQuick, MAX_QUICK } from '../quick.js';
 
@@ -97,7 +98,7 @@ export async function autoChecks() {
 // إرسال إعدادات الطابور إلى Kotlin (يعمل والتطبيق مغلق)
 export function syncNative() {
   const s = getSettings();
-  return Sayl.setConfig({ parallel: s.parallel, retries: s.retries, window: s.window }).catch(() => {});
+  return Sayl.setConfig({ parallel: s.parallel, retries: s.retries, window: s.window, autoServer: s.autoServer }).catch(() => {});
 }
 
 // نافذة التنزيل: الطابور لا يعمل إلا بين وقتين (مثلاً باقة ليلية)
@@ -198,6 +199,7 @@ function settingsPage({ page }) {
         chips([1, 2, 3].map((n) => ({ value: n, label: String(n) })), s.parallel, (v) => { set({ parallel: v }, parRow); syncNative(); })),
       connRow = setting('عدد الاتصالات', 'كم جزءاً يُنزَّل من الملف في الوقت نفسه. 4 مناسب لأغلب الشبكات، و8 للإنترنت السريع.',
         chips([2, 4, 8].map((n) => ({ value: n, label: String(n) })), s.connections, (v) => set({ connections: v }, connRow), 'c-sky')),
+      sw('التبديل التلقائي بين السيرفرات', 'إن فشل التنزيل يجرّب سَيْل سيرفراً آخر يدعم الرابط وحده (سيرفر 2 ليوتيوب، وسيرفر 3 لتيك توك). أطفئه لتختار أنت من بطاقة التنزيل.', 'autoServer', () => syncNative()),
       sw('محرّك aria2c', 'أسرع في المواقع العادية، وقد يبطئ يوتيوب لأنه يخنق الاتصالات الكثيرة. اتركه مطفأً إن لم تحتجه.', 'aria2'),
       retryRow = setting('إعادة المحاولة تلقائياً', 'عند فشل مؤقت يعيد سَيْل المحاولة وحده بعد 30 ثانية ثم دقيقتين ثم 10 دقائق، ويكمل من حيث توقف. انقطاع الإنترنت لا يُحسب محاولة.',
         chips([{ value: 0, label: 'بلا' }, ...[3, 5, 10].map((n) => ({ value: n, label: count(n, W.time) }))], s.retries, (v) => { set({ retries: v }, retryRow); syncNative(); })),
@@ -242,6 +244,7 @@ function componentsPage({ page }) {
           h('div', { class: 'kv-row' }, h('span', {}, 'آخر تحديث'), h('small', {}, fmtDate(c.ytdlpUpdatedAt) || 'لم يُحدَّث بعد')), channelSeg)),
       comp('c-violet', 'servers', 'سيرفر 2: NewPipe', 'بديل تلقائي ليوتيوب وساوندكلاود وباندكامب عند تعطل الأول', dot('ok', 'جاهز'),
         h('div', { class: 'comp-b' }, h('div', { class: 'kv-row' }, h('span', {}, 'الإصدار'), h('small', { class: 'ltr' }, c.server2 || '')))),
+      comp('c-pink', 'servers', 'سيرفر 3: صفحة تيك توك', 'يقرأ فيديو تيك توك من صفحته مباشرة دون طرف ثالث، بديلاً تلقائياً عند تعطل الأول', dot('ok', 'جاهز')),
       comp('c-amber', 'video', 'FFmpeg', 'دمج الصوت والصورة والتحويل إلى MP3', dot(c.ffmpeg ? 'ok' : 'bad', c.ffmpeg ? 'جاهز' : 'غير موجود')),
       comp('c-slate', 'bolt', 'aria2c', 'محرّك اختياري من الإعدادات', dot(c.aria2c ? 'ok' : 'bad', c.aria2c ? 'جاهز' : 'غير موجود')));
   };
@@ -309,31 +312,40 @@ function aboutPage({ page }) {
   );
 }
 
+// «المزيد» بثلاثة تبويبات فرعية: الإعدادات، والمساعدة (الشرح والجولة والتشخيص)، وعن سَيْل
+const MORE_TABS = [['settings', 'الإعدادات', 'gear'], ['help', 'المساعدة', 'book'], ['app', 'عن سَيْل', 'info']];
+let moreTab = 'settings';
+
 export function moreView({ page, open }) {
   const sub = (title, render) => () => open({ title, render });
-  const status = h('small', {}, `الإصدار الحالي ${VERSION}`);
-  const check = h('button', { id: 'check-update', class: 'lcard', onclick: async () => {
-    check.classList.add('busy');
-    status.textContent = 'جارٍ التحقق…';
-    try {
-      const r = await checkApp(true);
-      status.textContent = r === 'new' ? 'يوجد إصدار جديد' : `لديك أحدث إصدار (${VERSION})`;
-    } catch (e) { status.textContent = e.message; toast(e.message, 'bad'); }
-    check.classList.remove('busy');
-  } }, ic('cloud', 'l-ic c-indigo'), h('span', { class: 'l-txt' }, h('b', {}, 'التحقق من التحديثات'), status), ic('chevL', 'l-go'));
-
   const card = (id, o) => { const c = lcard(o); c.id = id; return c; };
-  page.append(
-    h('div', { class: 'intro' }, h('h2', {}, 'المزيد')),
+  const body = h('div', { class: 'more-body' });
+
+  const settingsTab = () => [h('div', { class: 'lcards' },
+    card('open-settings', { color: 'c-slate', icon: 'gear', title: 'الإعدادات', sub: 'المظهر، والجودة، والسرعة، والسيرفرات، و«احفظ بطريقتي»', onClick: sub('الإعدادات', settingsPage) }),
+    card('open-engine', { color: 'c-sky', icon: 'servers', title: 'المكوّنات والسيرفرات', sub: 'السيرفرات الثلاثة، وFFmpeg، والتحديثات', onClick: sub('المكوّنات والسيرفرات', componentsPage) }),
+    card('open-cookies', { color: 'c-green', icon: 'cookie', title: 'ملف cookies', sub: 'للمحتوى الخاص أو الذي يحتاج تسجيل دخول', onClick: sub('ملف cookies', cookiesPage) }))];
+
+  const helpTab = () => [
     h('div', { class: 'lcards' },
-      card('open-settings', { color: 'c-slate', icon: 'gear', title: 'الإعدادات', sub: 'المظهر، والجودة الافتراضية، والسرعة', onClick: sub('الإعدادات', settingsPage) }),
-      card('open-engine', { color: 'c-sky', icon: 'servers', title: 'المكوّنات والسيرفرات', sub: 'سيرفر 1 وسيرفر 2 والتحديثات', onClick: sub('المكوّنات والسيرفرات', componentsPage) }),
-      card('open-cookies', { color: 'c-green', icon: 'cookie', title: 'ملف cookies', sub: 'للمحتوى الخاص أو الذي يحتاج تسجيل دخول', onClick: sub('ملف cookies', cookiesPage) }),
-      card('open-log', { color: 'c-pink', icon: 'bug', title: 'سجل التشخيص', sub: 'آخر الأخطاء لإرسالها للمطوّر', onClick: sub('سجل التشخيص', logPage) })),
-    h('h3', { class: 'sec-h' }, 'التطبيق'),
-    h('div', { class: 'lcards' },
-      check,
       card('open-tour', { color: 'c-sky', icon: 'book', title: 'جولة في التطبيق', sub: 'كيف تستخدم سَيْل في دقيقة', onClick: () => openTour() }),
+      card('open-log', { color: 'c-pink', icon: 'bug', title: 'سجل التشخيص', sub: 'آخر الأخطاء لإرسالها للمطوّر', onClick: sub('سجل التشخيص', logPage) })),
+    ...guideList(),
+  ];
+
+  const appTab = () => {
+    const status = h('small', {}, `الإصدار الحالي ${VERSION}`);
+    const check = h('button', { id: 'check-update', class: 'lcard', onclick: async () => {
+      check.classList.add('busy');
+      status.textContent = 'جارٍ التحقق…';
+      try {
+        const r = await checkApp(true);
+        status.textContent = r === 'new' ? 'يوجد إصدار جديد' : `لديك أحدث إصدار (${VERSION})`;
+      } catch (e) { status.textContent = e.message; toast(e.message, 'bad'); }
+      check.classList.remove('busy');
+    } }, ic('cloud', 'l-ic c-indigo'), h('span', { class: 'l-txt' }, h('b', {}, 'التحقق من التحديثات'), status), ic('chevL', 'l-go'));
+    return [h('div', { class: 'lcards' },
+      check,
       card('open-changes', { color: 'c-amber', icon: 'star', title: 'ما الجديد', sub: 'ما أضيف في كل إصدار', onClick: sub('ما الجديد', changesPage) }),
       card('share-app', { color: 'c-violet', icon: 'share', title: 'مشاركة التطبيق', sub: 'أرسل رابط التحميل لمن تحب', onClick: async () => {
         try {
@@ -342,6 +354,17 @@ export function moreView({ page, open }) {
         } catch (e) { if (!isNative) toast(RELEASES_PAGE); }
       } }),
       card('open-about', { color: 'c-indigo', icon: 'info', title: 'حول التطبيق', sub: `سَيْل ${VERSION}`, onClick: sub('حول التطبيق', aboutPage) })),
-    h('p', { class: 'foot' }, 'سَيْل · صُنع بحب'),
-  );
+    h('p', { class: 'foot' }, 'سَيْل · صُنع بحب')];
+  };
+
+  const RENDER = { settings: settingsTab, help: helpTab, app: appTab };
+  const tabs = h('div', { class: 'seg c-slate more-tabs', role: 'tablist' }, MORE_TABS.map(([id, label, icon]) =>
+    h('button', { id: `more-tab-${id}`, role: 'tab', 'aria-selected': String(moreTab === id), class: moreTab === id ? 'on' : '',
+      onclick: () => { moreTab = id; draw(); } }, ic(icon), label)));
+  function draw() {
+    tabs.querySelectorAll('button').forEach((b) => { const on = b.id === `more-tab-${moreTab}`; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    body.replaceChildren(...RENDER[moreTab]());
+  }
+  page.append(h('div', { class: 'intro' }, h('h2', {}, 'المزيد')), tabs, body);
+  draw();
 }

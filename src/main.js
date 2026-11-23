@@ -12,18 +12,18 @@ import { Sayl, isNative } from './native.js';
 import { homeView, handleSharedText } from './views/home.js';
 import { jobsView } from './views/jobs.js';
 import { libraryView } from './views/library.js';
-import { guideView } from './views/guide.js';
+import { photosView } from './views/photos.js';
 import { moreView, autoChecks, syncNative } from './views/more.js';
 
 // [المعرّف، الاسم، الأيقونة، لون التبويب]
 const TABS = [
   ['home', 'الرئيسية', 'home', 'c-indigo'],
   ['jobs', 'التنزيلات', 'download', 'c-sky'],
+  ['photos', 'الصور', 'image', 'c-amber'],
   ['library', 'المكتبة', 'grid', 'c-green'],
-  ['guide', 'الشرح', 'book', 'c-amber'],
   ['more', 'المزيد', 'more', 'c-violet'],
 ];
-const VIEWS = { home: homeView, jobs: jobsView, library: libraryView, guide: guideView, more: moreView };
+const VIEWS = { home: homeView, jobs: jobsView, library: libraryView, photos: photosView, more: moreView };
 
 let tab = 'home';
 let stack = [];   // الصفحات الفرعية فوق التبويب الحالي
