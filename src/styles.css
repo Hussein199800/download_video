@@ -578,3 +578,16 @@ details.extras[open] > summary { margin-bottom: var(--sp-2); }
 .quick-row { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
 .quick-row .l-txt { flex: 1; min-width: 0; display: grid; }
 .quick-row small { color: var(--mute); font-size: var(--fz-xs); }
+
+/* «المزيد» بتبويبات فرعية، وشرح تبويب الصور */
+.more-tabs { margin-bottom: var(--sp-3); }
+.more-body { display: grid; gap: var(--sp-3); }
+.guide-card ol { margin: 0; padding-inline-start: 1.25rem; display: grid; gap: var(--sp-2); line-height: 1.8; }
+.guide-card p { margin: 0 0 var(--sp-2); line-height: 1.8; }
+/* بالعرض: محتوى التبويب الفرعي يتوزع على العمودين، وشريط التبويبات بعرضهما */
+html.two-col .page-anim > .more-tabs { column-span: all; }
+html.two-col .page-anim > .more-body { display: contents; }
+html.two-col .more-body > * { break-inside: avoid; margin-top: 0; margin-bottom: .875rem; }
+html.two-col .more-body > .sec-h { margin-top: .5rem !important; break-after: avoid; }
+html.two-col .more-body > .lcards, html.two-col .more-body > .guide { display: block; break-inside: auto; }
+html.two-col .more-body > .lcards > *, html.two-col .more-body > .guide > * { break-inside: avoid; margin-bottom: .75rem; }

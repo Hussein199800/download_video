@@ -245,22 +245,27 @@ async function main() {
     await page.waitForSelector('.tabbar');
     check('الإعدادات تبقى بعد إعادة الفتح', await page.evaluate(() => document.documentElement.dataset.theme) === 'light');
     await page.click('.tabbar [data-tab="more"]');
+    await page.click('#more-tab-app');
     await page.click('#open-about');
     const about = (await text(page)).replace(/\s+/g, ' ');
     check('حول التطبيق بنص سكينة نفسه', about.includes(ABOUT), about.slice(0, 300));
     check('رقم الإصدار في حول التطبيق', about.includes(VER));
     await shot(page, { path: path.join(OUT, 'about.png') });
     await page.click('.icon-btn[aria-label="رجوع"]');
+    check('التبويب الفرعي يبقى بعد الرجوع', await page.locator('#more-tab-app.on').count() === 1);
+    await page.click('#more-tab-settings');
     await page.click('#open-engine');
     await page.waitForSelector('#engine-ver');
     check('إصدار مكوّن التنزيل يظهر', /2026\.10\.10/.test(await page.locator('#engine-ver').innerText()));
     const ct = await text(page);
-    check('صفحة المكوّنات تعرض السيرفرين وFFmpeg وقناة yt-dlp', /سيرفر 1/.test(ct) && /سيرفر 2/.test(ct) && /FFmpeg/.test(ct) && /Nightly/.test(ct));
+    check('صفحة المكوّنات تعرض السيرفرات الثلاثة وFFmpeg وقناة yt-dlp', /سيرفر 1/.test(ct) && /سيرفر 2/.test(ct) && /سيرفر 3/.test(ct) && /FFmpeg/.test(ct) && /Nightly/.test(ct));
     await shot(page, { path: path.join(OUT, 'components.png') });
     await page.click('.icon-btn[aria-label="رجوع"]');
+    await page.click('#more-tab-app');
     await page.click('#check-update');
     await page.waitForTimeout(300);
     check('التحقق من التحديثات يعمل', /أحدث إصدار|لديك/.test(await text(page)));
+    await page.click('#more-tab-help');
     await page.click('#open-log');
     check('سجل التشخيص بلا null', !/\bnull\b/.test(await text(page)));
     await page.click('.icon-btn[aria-label="رجوع"]');
@@ -269,8 +274,9 @@ async function main() {
 
     // ---------- الشرح وعرض صغير ----------
     page = await newPage(browser, base, { viewport: { width: 340, height: 700 } });
-    await page.click('.tabbar [data-tab="guide"]');
-    check('صفحة الشرح فيها أقسام', await page.locator('.g-item').count() >= 6);
+    await page.click('.tabbar [data-tab="more"]');
+    await page.click('#more-tab-help');
+    check('الشرح في «المزيد ← المساعدة» فيه أقسام', await page.locator('.g-item').count() >= 6);
     await page.locator('.g-item .g-head').first().click();
     check('فتح قسم من الشرح', await page.locator('.g-item.open').count() === 1);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);

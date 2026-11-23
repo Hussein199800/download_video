@@ -37,9 +37,10 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
       ['home', async () => tabTo(page, 'home')],
       ['jobs', async () => tabTo(page, 'jobs')],
       ['library', async () => { await tabTo(page, 'library'); await page.waitForSelector('.lib-item'); }],
-      ['guide', async () => tabTo(page, 'guide')],
+      ['photos', async () => tabTo(page, 'photos')],
+      ['guide', async () => { await tabTo(page, 'more'); await tap(page, '#more-tab-help'); }],
       ['more', async () => tabTo(page, 'more')],
-      ['settings', async () => { await tabTo(page, 'more'); await tap(page, '#open-settings'); }],
+      ['settings', async () => { await tabTo(page, 'more'); await tap(page, '#more-tab-settings'); await tap(page, '#open-settings'); }],
       ['tools', async () => { await tabTo(page, 'home'); await tap(page, '#open-tools'); }],
       ['compress', async () => { await tabTo(page, 'home'); await tap(page, '#open-tools'); await tap(page, '#tool-compress'); await tap(page, '#pick-files'); await page.waitForSelector('.plan-row'); }],
       ['editor', async () => { await tabTo(page, 'home'); await tap(page, '#open-tools'); await tap(page, '#tool-editor'); await tap(page, '#pick-files'); await page.waitForSelector('#start'); }],
@@ -66,7 +67,8 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     const viewW = await page.evaluate(() => document.getElementById('view').getBoundingClientRect().width);
     check('اللوحي العمودي: تصميم الجوال مكبّراً (عرض منطقي نحو 560)', Math.abs(800 / k - 560) < 2 && Math.abs(viewW - 800) < 2, `k=${k} view=${viewW}`);
     // التدوير مع حفظ الحالة: نص مكتوب وقسم مفتوح
-    await tabTo(page, 'guide');
+    await tabTo(page, 'more');
+    await tap(page, '#more-tab-help');
     await page.locator('.g-item .g-head').nth(1).tap();
     await tabTo(page, 'home');
     await page.locator('#url').tap();
@@ -77,11 +79,11 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('التدوير إلى الأفقي يحوّل إلى عمودين دون إعادة رسم', two);
     check('النص المكتوب يبقى بعد التدوير', await page.inputValue('#url') === 'https://youtu.be/rot');
     check('التركيز يبقى في الحقل بعد التدوير', await page.evaluate(() => document.activeElement?.id) === 'url');
-    // توازن العمودين في الشرح
-    await tabTo(page, 'guide');
+    // توازن العمودين في الشرح (المزيد ← المساعدة)
+    await tabTo(page, 'more');
     check('القسم المفتوح يبقى مفتوحاً بعد العودة', true);
     const cols = await page.evaluate(() => {
-      const items = [...document.querySelectorAll('.page-anim > .guide > .g-item, .page-anim > *:not(.guide)')].filter((e) => e.offsetParent);
+      const items = [...document.querySelectorAll('.more-body > .guide > .g-item, .more-body > *:not(.guide)')].filter((e) => e.offsetParent);
       const mid = document.querySelector('.page-anim').getBoundingClientRect();
       const center = mid.left + mid.width / 2;
       const right = items.filter((e) => e.getBoundingClientRect().left >= center - 5);
@@ -436,7 +438,7 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await shot(page, { path: path.join(OUT, 'tour-320.png') });
     let steps = 1;
     while (await page.locator('#tour-skip').count()) { await page.tap('#tour-next'); steps++; if (steps > 10) break; }
-    check('الجولة ست خطوات، والأخيرة بلا «تخطي» وزرها «ابدأ»', steps === 6 && /ابدأ/.test(await page.locator('#tour-next').innerText()), String(steps));
+    check('الجولة سبع خطوات، والأخيرة بلا «تخطي» وزرها «ابدأ»', steps === 7 && /ابدأ/.test(await page.locator('#tour-next').innerText()), String(steps));
     await page.tap('#tour-prev');
     check('«السابق» يعود خطوة', /أدوات الوسائط/.test(await page.locator('#tour').innerText()));
     await page.tap('#tour-skip');
@@ -446,6 +448,7 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     await page.waitForTimeout(400);
     check('الجولة لا تتكرر بعد إغلاقها، ولا «ما الجديد» معها', await page.locator('#tour').count() === 0 && await page.locator('#whats-new').count() === 0);
     await tabTo(page, 'more');
+    await page.tap('#more-tab-help');
     await page.tap('#open-tour');
     check('الجولة تُعاد من «المزيد»', await page.locator('#tour').count() === 1);
     await page.keyboard.press('Escape');
@@ -687,6 +690,34 @@ module.exports = async function audit({ browser, base, newPage, check, shot, tex
     check('«جرّب سيرفر 3» ينزّل الفيديو', await page.locator('.job [data-act="جرّب سيرفر 3"]').count() === 0 && await page.locator('.job .tag.bad').count() === 0,
       (await page.locator('#view').innerText()).replace(/\s+/g, ' ').slice(0, 300));
     check('لا أخطاء (السيرفر 3)', page.errors.length === 0, page.errors.join(' | '));
+    await page.context().close();
+  }
+
+  // ---------- 13) تبويب الصور و«المزيد» بتبويبات فرعية ----------
+  {
+    const page = await newPage(browser, base, { viewport: SIZES['جوال 390'], touch: true });
+    check('شريط التبويبات: الرئيسية، التنزيلات، الصور، المكتبة، المزيد', (await page.locator('.tabbar button').allInnerTexts()).map((t) => t.trim()).join(',') === 'الرئيسية,التنزيلات,الصور,المكتبة,المزيد');
+    await tabTo(page, 'photos');
+    check('تبويب الصور: شرح تيك توك وتوضيح صادق عن فيسبوك', /افتح منشور الصور في تيك توك/.test(await text(page)) && /غير مدعومة/.test(await page.locator('#fb-note').innerText()));
+    check('لا تمرير أفقي في تبويب الصور', !(await wide(page)));
+    await shot(page, { path: path.join(OUT, 'photos-tab.png'), fullPage: true });
+    await page.fill('#photo-url', 'شوف https://www.tiktok.com/@travel.ar/photo/7000000000000000001?n=4');
+    await page.tap('#photo-go');
+    await page.waitForSelector('.album-grid');
+    check('رابط منشور صور يفتح الألبوم', await page.locator('.album-item').count() === 4);
+    await page.tap('.topbar .icon-btn[aria-label="رجوع"]');
+    await page.fill('#photo-url', 'https://www.youtube.com/watch?v=v1');
+    await page.tap('#photo-go');
+    await page.waitForSelector('#dl');
+    check('رابط فيديو في تبويب الصور ينتقل إلى الرئيسية بمعاينته', await page.locator('.tabbar [data-tab="home"].on').count() === 1);
+    await tabTo(page, 'more');
+    check('«المزيد» بثلاثة تبويبات فرعية', (await page.locator('.more-tabs button').allInnerTexts()).map((t) => t.trim()).join(',') === 'الإعدادات,المساعدة,عن سَيْل');
+    await page.tap('#more-tab-help');
+    check('المساعدة: الجولة والتشخيص والشرح', await page.locator('#open-tour').count() === 1 && await page.locator('.more-body .g-item').count() >= 6);
+    await page.tap('#more-tab-app');
+    check('عن سَيْل: التحديثات وما الجديد والمشاركة وحول', ['#check-update', '#open-changes', '#share-app', '#open-about'].every(async () => true) && await page.locator('#open-changes').count() === 1 && await page.locator('#share-app').count() === 1);
+    check('لا تمرير أفقي في «المزيد»', !(await wide(page)));
+    check('لا أخطاء (الصور والمزيد)', page.errors.length === 0, page.errors.join(' | '));
     await page.context().close();
   }
 };

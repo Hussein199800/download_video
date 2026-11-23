@@ -23,10 +23,11 @@ let pendingQuick = null;
 let preferType = 'video';
 
 // رابط من المشاركة أو الحافظة: «احفظ بطريقتي» (طرق جاهزة بلمسة) أو المعاينة المفصّلة
-export function handleSharedText(text, ctx) {
+// direct: إلى المعاينة دون نافذة الطرق (مثلاً رابط فيديو لُصق في تبويب الصور)
+export function handleSharedText(text, ctx, { direct = false } = {}) {
   const url = extractUrl(text);
   const s = getSettings();
-  if (!url || !s.shareAsk || !s.quick.length) { pendingShared = text; ctx.go('home'); return; }
+  if (!url || direct || !s.shareAsk || !s.quick.length) { pendingShared = text; ctx.go('home'); return; }
   document.querySelector('.modal .quick-sheet')?.closest('.modal')?.remove();
   const pick = (p) => () => { close(); pendingShared = url; pendingQuick = p; ctx.go('home'); };
   const close = sheet(h('div', { class: 'quick-sheet' },

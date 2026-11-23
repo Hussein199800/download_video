@@ -10,6 +10,7 @@ import { fetchLatest, isNewer, shouldCheck, RELEASES_PAGE, STABLE_APK, plainNote
 import { VERSION } from '../version.js';
 import { CHANGELOG } from '../changelog.js';
 import { openTour } from './tour.js';
+import { guideList } from './guide.js';
 import { choicePicker } from './choice.js';
 import { quickLabel, quickHint, sameQuick, MAX_QUICK } from '../quick.js';
 
@@ -311,31 +312,41 @@ function aboutPage({ page }) {
   );
 }
 
+// «المزيد» بثلاثة تبويبات فرعية: الإعدادات، والمساعدة (الشرح والجولة والتشخيص)، وعن سَيْل
+const MORE_TABS = [['settings', 'الإعدادات', 'gear'], ['help', 'المساعدة', 'book'], ['app', 'عن سَيْل', 'info']];
+let moreTab = 'settings';
+
 export function moreView({ page, open }) {
   const sub = (title, render) => () => open({ title, render });
-  const status = h('small', {}, `الإصدار الحالي ${VERSION}`);
-  const check = h('button', { id: 'check-update', class: 'lcard', onclick: async () => {
-    check.classList.add('busy');
-    status.textContent = 'جارٍ التحقق…';
-    try {
-      const r = await checkApp(true);
-      status.textContent = r === 'new' ? 'يوجد إصدار جديد' : `لديك أحدث إصدار (${VERSION})`;
-    } catch (e) { status.textContent = e.message; toast(e.message, 'bad'); }
-    check.classList.remove('busy');
-  } }, ic('cloud', 'l-ic c-indigo'), h('span', { class: 'l-txt' }, h('b', {}, 'التحقق من التحديثات'), status), ic('chevL', 'l-go'));
-
   const card = (id, o) => { const c = lcard(o); c.id = id; return c; };
-  page.append(
-    h('div', { class: 'intro' }, h('h2', {}, 'المزيد')),
+  const body = h('div', { class: 'more-body' });
+
+  const settingsTab = () => [h('div', { class: 'lcards' },
+    card('open-settings', { color: 'c-slate', icon: 'gear', title: 'الإعدادات', sub: 'المظهر، والجودة، والسرعة، والسيرفرات، و«احفظ بطريقتي»', onClick: sub('الإعدادات', settingsPage) }),
+    card('open-engine', { color: 'c-sky', icon: 'servers', title: 'المكوّنات والسيرفرات', sub: 'سيرفر 1 و2 و3 والتحديثات', onClick: sub('المكوّنات والسيرفرات', componentsPage) }),
+    card('open-cookies', { color: 'c-green', icon: 'cookie', title: 'ملف cookies', sub: 'للمحتوى الخاص أو الذي يحتاج تسجيل دخول', onClick: sub('ملف cookies', cookiesPage) }))];
+
+  const helpTab = () => [
     h('div', { class: 'lcards' },
-      card('open-settings', { color: 'c-slate', icon: 'gear', title: 'الإعدادات', sub: 'المظهر، والجودة الافتراضية، والسرعة', onClick: sub('الإعدادات', settingsPage) }),
-      card('open-engine', { color: 'c-sky', icon: 'servers', title: 'المكوّنات والسيرفرات', sub: 'سيرفر 1 وسيرفر 2 والتحديثات', onClick: sub('المكوّنات والسيرفرات', componentsPage) }),
-      card('open-cookies', { color: 'c-green', icon: 'cookie', title: 'ملف cookies', sub: 'للمحتوى الخاص أو الذي يحتاج تسجيل دخول', onClick: sub('ملف cookies', cookiesPage) }),
-      card('open-log', { color: 'c-pink', icon: 'bug', title: 'سجل التشخيص', sub: 'آخر الأخطاء لإرسالها للمطوّر', onClick: sub('سجل التشخيص', logPage) })),
-    h('h3', { class: 'sec-h' }, 'التطبيق'),
-    h('div', { class: 'lcards' },
-      check,
       card('open-tour', { color: 'c-sky', icon: 'book', title: 'جولة في التطبيق', sub: 'كيف تستخدم سَيْل في دقيقة', onClick: () => openTour() }),
+      card('open-log', { color: 'c-pink', icon: 'bug', title: 'سجل التشخيص', sub: 'آخر الأخطاء لإرسالها للمطوّر', onClick: sub('سجل التشخيص', logPage) })),
+    h('h3', { class: 'sec-h' }, 'الشرح'),
+    guideList(),
+  ];
+
+  const appTab = () => {
+    const status = h('small', {}, `الإصدار الحالي ${VERSION}`);
+    const check = h('button', { id: 'check-update', class: 'lcard', onclick: async () => {
+      check.classList.add('busy');
+      status.textContent = 'جارٍ التحقق…';
+      try {
+        const r = await checkApp(true);
+        status.textContent = r === 'new' ? 'يوجد إصدار جديد' : `لديك أحدث إصدار (${VERSION})`;
+      } catch (e) { status.textContent = e.message; toast(e.message, 'bad'); }
+      check.classList.remove('busy');
+    } }, ic('cloud', 'l-ic c-indigo'), h('span', { class: 'l-txt' }, h('b', {}, 'التحقق من التحديثات'), status), ic('chevL', 'l-go'));
+    return [h('div', { class: 'lcards' },
+      check,
       card('open-changes', { color: 'c-amber', icon: 'star', title: 'ما الجديد', sub: 'ما أضيف في كل إصدار', onClick: sub('ما الجديد', changesPage) }),
       card('share-app', { color: 'c-violet', icon: 'share', title: 'مشاركة التطبيق', sub: 'أرسل رابط التحميل لمن تحب', onClick: async () => {
         try {
@@ -344,6 +355,17 @@ export function moreView({ page, open }) {
         } catch (e) { if (!isNative) toast(RELEASES_PAGE); }
       } }),
       card('open-about', { color: 'c-indigo', icon: 'info', title: 'حول التطبيق', sub: `سَيْل ${VERSION}`, onClick: sub('حول التطبيق', aboutPage) })),
-    h('p', { class: 'foot' }, 'سَيْل · صُنع بحب'),
-  );
+    h('p', { class: 'foot' }, 'سَيْل · صُنع بحب')];
+  };
+
+  const RENDER = { settings: settingsTab, help: helpTab, app: appTab };
+  const tabs = h('div', { class: 'seg c-slate more-tabs', role: 'tablist' }, MORE_TABS.map(([id, label, icon]) =>
+    h('button', { id: `more-tab-${id}`, role: 'tab', 'aria-selected': String(moreTab === id), class: moreTab === id ? 'on' : '',
+      onclick: () => { moreTab = id; draw(); } }, ic(icon), label)));
+  function draw() {
+    tabs.querySelectorAll('button').forEach((b) => { const on = b.id === `more-tab-${moreTab}`; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    body.replaceChildren(...RENDER[moreTab]());
+  }
+  page.append(h('div', { class: 'intro' }, h('h2', {}, 'المزيد')), tabs, body);
+  draw();
 }
