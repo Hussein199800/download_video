@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- HTTP العادي مسموح لأن كثيراً من خوادم الملفات لا تدعم HTTPS، والواجهة تنبّه إليه.
+     الثقة بشهادات النظام فقط: لا تعطيل للتحقق من TLS ولا شهادات مستخدم. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors><certificates src="system" /></trust-anchors>
+    </base-config>
+</network-security-config>

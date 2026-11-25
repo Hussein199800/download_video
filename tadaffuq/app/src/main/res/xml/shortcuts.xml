@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="add" android:enabled="true" android:icon="@drawable/ic_shortcut_add"
+        android:shortcutShortLabel="@string/shortcut_add" android:shortcutLongLabel="@string/shortcut_add">
+        <intent android:action="com.tadaffuq.app.ADD" android:targetPackage="com.tadaffuq.app" android:targetClass="com.tadaffuq.app.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="downloads" android:enabled="true" android:icon="@drawable/ic_shortcut_list"
+        android:shortcutShortLabel="@string/tab_downloads" android:shortcutLongLabel="@string/tab_downloads">
+        <intent android:action="com.tadaffuq.app.DOWNLOADS" android:targetPackage="com.tadaffuq.app" android:targetClass="com.tadaffuq.app.MainActivity" />
+    </shortcut>
+</shortcuts>
