@@ -81,7 +81,8 @@ fun TadaffuqTheme(mode: ThemeMode = ThemeMode.SYSTEM, fontScale: Float = 1f, con
         surface = DarkBg, onSurface = Color(0xFFE6EDF3),
         surfaceVariant = Color(0xFF1C222B), onSurfaceVariant = Color(0xFF9AA4AF),
         surfaceContainer = Color(0xFF161B22), surfaceContainerHigh = Color(0xFF1C222B), surfaceContainerLow = Color(0xFF12161D),
-        outline = Color(0xFF30363D), outlineVariant = Color(0xFF262C34),
+        surfaceContainerHighest = Color(0xFF2D333B),
+        outline = Color(0xFF6E7681), outlineVariant = Color(0xFF262C34),
         error = Color(0xFFFF7B72), onError = Color(0xFF3D0A07),
     ) else lightColorScheme(
         primary = Navy, onPrimary = Color.White,
@@ -92,7 +93,8 @@ fun TadaffuqTheme(mode: ThemeMode = ThemeMode.SYSTEM, fontScale: Float = 1f, con
         surface = LightBg, onSurface = Color(0xFF111827),
         surfaceVariant = Color(0xFFE9EDF2), onSurfaceVariant = Color(0xFF5B6573),
         surfaceContainer = Color.White, surfaceContainerHigh = Color.White, surfaceContainerLow = Color(0xFFF0F3F7),
-        outline = Color(0xFFD5DBE3), outlineVariant = Color(0xFFE5E9EF),
+        surfaceContainerHighest = Color(0xFFE3E8EE),
+        outline = Color(0xFF8A94A3), outlineVariant = Color(0xFFE5E9EF),
         error = Color(0xFFC92A2F), onError = Color.White,
     )
     val extra = if (dark) Extra(

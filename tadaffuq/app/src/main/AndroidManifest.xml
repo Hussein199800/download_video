@@ -59,6 +59,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- خدمة WorkManager الأمامية لعامل الاستئناف: نوعها إلزامي من Android 14 -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
+
         <receiver android:name=".download.NotificationActionReceiver" android:exported="false" />
 
         <receiver android:name=".download.BootReceiver" android:exported="false">

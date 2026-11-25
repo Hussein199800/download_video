@@ -74,6 +74,22 @@ fun TaskDetailSheet(t: TaskEntity, live: Snapshot?, vm: MainViewModel, onDismiss
     val ctx = LocalContext.current
     var dialog by remember { mutableStateOf<String?>(null) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        TaskDetailContent(t, live, vm) { dialog = it }
+    }
+
+    when (dialog) {
+        "limit" -> SpeedLimitDialog(t.speedLimitBps, { dialog = null }) { vm.setSpeedLimit(t.id, it); dialog = null }
+        "url" -> UrlDialog(t.url, { dialog = null }) { vm.updateUrl(t.id, it); dialog = null }
+        "delete" -> DeleteDialog(1, t.status == TaskStatus.COMPLETED, { dialog = null }) { withFiles -> vm.delete(listOf(t.id), withFiles); dialog = null; onDismiss() }
+    }
+}
+
+/** محتوى التفاصيل منفصلاً عن النافذة ليُعاد استعماله ويُختبر. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun TaskDetailContent(t: TaskEntity, live: Snapshot?, vm: MainViewModel, openDialog: (String) -> Unit) {
+    val ctx = LocalContext.current
+    run {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(horizontal = 20.dp)) {
             Text(t.fileName, style = MaterialTheme.typography.titleLarge)
             Text(statusText(t.status), style = MaterialTheme.typography.labelLarge, color = statusColor(t.status))
@@ -113,7 +129,7 @@ fun TaskDetailSheet(t: TaskEntity, live: Snapshot?, vm: MainViewModel, onDismiss
                 Text(stringResource(R.string.final_link), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 4.dp))
                 Text(t.finalUrl.orEmpty(), style = MaterialTheme.typography.bodySmall, color = T.extra.secondaryText)
             }
-            Text(sr(R.string.saved_in, t.filePath ?: t.dirPath), style = MaterialTheme.typography.bodySmall, color = T.extra.secondaryText, modifier = Modifier.padding(top = 4.dp))
+            Text(sr(R.string.saved_in, Fmt.iso(t.filePath ?: t.dirPath)), style = MaterialTheme.typography.bodySmall, color = T.extra.secondaryText, modifier = Modifier.padding(top = 4.dp))
             t.actualHash?.let { Text("SHA/MD5: ${Fmt.iso(it)}", style = MaterialTheme.typography.bodySmall, color = if (t.hashOk == false) T.extra.danger else T.extra.secondaryText) }
 
             // طبيب التحميل: قواعد ثابتة على قراءات المهمة الحقيقية
@@ -162,23 +178,17 @@ fun TaskDetailSheet(t: TaskEntity, live: Snapshot?, vm: MainViewModel, onDismiss
                 } else {
                     Action(Icons.Rounded.ArrowUpward, stringResource(R.string.priority_up)) { vm.setPriority(t.id, t.priority + 1) }
                     Action(Icons.Rounded.ArrowDownward, stringResource(R.string.priority_down)) { vm.setPriority(t.id, t.priority - 1) }
-                    Action(Icons.Rounded.Speed, stringResource(R.string.speed_limit)) { dialog = "limit" }
-                    Action(Icons.Rounded.Link, stringResource(R.string.refresh_link)) { dialog = "url" }
+                    Action(Icons.Rounded.Speed, stringResource(R.string.speed_limit)) { openDialog("limit") }
+                    Action(Icons.Rounded.Link, stringResource(R.string.refresh_link)) { openDialog("url") }
                     Action(Icons.Rounded.RestartAlt, stringResource(R.string.action_restart)) { vm.restart(t.id) }
                 }
                 Action(Icons.Rounded.ContentCopy, stringResource(R.string.copy_link)) {
                     ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("url", t.url))
                 }
-                Action(Icons.Rounded.Delete, stringResource(R.string.action_delete)) { dialog = "delete" }
+                Action(Icons.Rounded.Delete, stringResource(R.string.action_delete)) { openDialog("delete") }
             }
             Spacer(Modifier.height(20.dp))
         }
-    }
-
-    when (dialog) {
-        "limit" -> SpeedLimitDialog(t.speedLimitBps, { dialog = null }) { vm.setSpeedLimit(t.id, it); dialog = null }
-        "url" -> UrlDialog(t.url, { dialog = null }) { vm.updateUrl(t.id, it); dialog = null }
-        "delete" -> DeleteDialog(1, t.status == TaskStatus.COMPLETED, { dialog = null }) { withFiles -> vm.delete(listOf(t.id), withFiles); dialog = null; onDismiss() }
     }
 }
 

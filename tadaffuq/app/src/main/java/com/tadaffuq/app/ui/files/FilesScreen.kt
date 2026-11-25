@@ -174,7 +174,7 @@ private fun FileInfoSheet(t: TaskEntity, vm: MainViewModel, onDismiss: () -> Uni
             Line(R.string.size, Fmt.bytes(t.totalBytes))
             Line(R.string.type, Fmt.iso(t.mimeType ?: StorageDirs.mime(t.fileName)))
             t.completedAt?.let { Line(R.string.completed_at, Fmt.date(it)) }
-            Line(R.string.path, t.filePath.orEmpty())
+            Line(R.string.path, Fmt.iso(t.filePath.orEmpty()))
             Line(R.string.source, t.url)
             if (file?.exists() != true) Text(stringResource(R.string.file_missing), color = T.extra.danger, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(10.dp))
